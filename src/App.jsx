@@ -1,4 +1,4 @@
-import { HashRouter } from "react-router-dom";
+import { HashRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import { CartProvider } from "./context/CartContext"; 
 import Navbar from "./components/Navbar";
