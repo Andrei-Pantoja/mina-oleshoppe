@@ -1,4 +1,4 @@
-﻿🛍️ Mina Ole Shoppe
+🛍️ Mina OleShoppe
 
 A simple e-commerce website built to showcase and manage products in an online shop environment.
 
