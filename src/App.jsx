@@ -9,7 +9,7 @@ function App() {
   return (
     <AuthProvider>
       <CartProvider> 
-        <HashRouter basename="/mina-oleshoppe">
+        <HashRouter>
           <Navbar />
           <Routes>
             <Route path="/" element={<StorePage />} />
