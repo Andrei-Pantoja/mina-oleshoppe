@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { collection, getDocs, query, orderBy } from "firebase/firestore";
+import { collection, getDocs } from "firebase/firestore"; // ✅ FIXED
 import { db } from "../firebase/config";
 import ProductCard from "../components/ProductCard";
 import ProductModal from "../components/ProductModal";
@@ -21,15 +21,15 @@ export default function StorePage() {
   const [search, setSearch] = useState("");
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [cartOpen, setCartOpen] = useState(false);
-  const [sortOption, setSortOption] = useState("Newest"); // ✅ NEW
+  const [sortOption, setSortOption] = useState("Newest");
 
   const { cart } = useCart();
 
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const q = query(collection(db, "products"), orderBy("createdAt", "desc"));
-        const snap = await getDocs(q);
+        // ✅ FIX: removed orderBy (was breaking on GitHub)
+        const snap = await getDocs(collection(db, "products"));
         setProducts(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
       } catch (err) {
         console.error("Error fetching products:", err);
@@ -40,7 +40,6 @@ export default function StorePage() {
     fetchProducts();
   }, []);
 
-  // ✅ FILTER + SORT
   const filtered = products
     .filter((p) => {
       const matchCat = activeCategory === "All" || p.category === activeCategory;
@@ -55,12 +54,11 @@ export default function StorePage() {
       if (sortOption === "Price High → Low") {
         return Number(b.price) - Number(a.price);
       }
-      return 0; // Newest already handled by Firestore
+      return 0;
     });
 
   return (
     <div style={styles.page}>
-      {/* HERO */}
       <div style={styles.hero}>
         <h1 style={styles.heroTitle}>🎥 Action Camera Accessories</h1>
         <p style={styles.heroSub}>
@@ -68,7 +66,6 @@ export default function StorePage() {
         </p>
       </div>
 
-      {/* TOP BAR */}
       <div style={styles.topBar}>
         <input
           type="text"
@@ -78,7 +75,6 @@ export default function StorePage() {
           style={styles.search}
         />
 
-        {/* ✅ FIXED SORT */}
         <select
           value={sortOption}
           onChange={(e) => setSortOption(e.target.value)}
@@ -91,7 +87,6 @@ export default function StorePage() {
       </div>
 
       <div style={styles.contentWrapper}>
-        {/* SIDEBAR */}
         <div style={styles.sidebar}>
           <h3 style={styles.sidebarTitle}>Categories</h3>
           {CATEGORIES.map((cat) => (
@@ -108,7 +103,6 @@ export default function StorePage() {
           ))}
         </div>
 
-        {/* PRODUCTS */}
         <div style={styles.mainContent}>
           <p style={{ marginBottom: 10, color: "#888" }}>
             {filtered.length} products found
@@ -137,46 +131,6 @@ export default function StorePage() {
         </div>
       </div>
 
-      {/* FOOTER */}
-      <footer style={styles.footer}>
-        <div style={styles.footerContent}>
-          <div style={styles.footerSection}>
-            <h3 style={styles.footerTitle}>📍 Our Store</h3>
-            <p style={styles.footerText}>
-              Mina OleShoppe<br />
-              Located in 999 Shopping Mall / Pasilio 2G-09 <br />
-              BLDG 2 BINONDO NEAR C.M RECTO SIDE ENTRANCE
-            </p>
-            <a href="https:https://www.google.com/maps/place/Puregold+-+C.M.+Recto+(999+Shopping+Mall)/@14.6063662,120.9711715,17z/data=!3m1!4b1!4m6!3m5!1s0x3397ca0ede72c809:0xed3a7ecddf8971ea!8m2!3d14.6063662!4d120.9737464!16s%2Fg%2F11bc6z98w7?entry=ttu&g_ep=EgoyMDI2MDQxMy4wIKXMDSoASAFQAw%3D%3D" rel="noreferrer">
-              <img src={mapImage} style={styles.mapImage} />
-            </a>
-          </div>
-
-          <div style={styles.footerSection}>
-            <h3 style={styles.footerTitle}>🏬 Store Preview</h3>
-            <div style={styles.storeImages}>
-              <img src={store1} style={styles.storeImg} />
-              <img src={store2} style={styles.storeImg} />
-              <img src={store3} style={styles.storeImg} />
-            </div>
-          </div>
-
-          <div style={styles.footerSection}>
-            <h3 style={styles.footerTitle}>📞 Contact</h3>
-            <p style={styles.footerText}>
-              📱 0966-654-5823<br />    
-              📱 0967-403-5934<br /> 
-              📱 0915-720-5299<br /> 
-              📱 0929-555-5992<br /> 
-              💬 Facebook Page: Mina OleShoppe
-            </p>
-          </div>
-        </div>
-
-        <p style={styles.footerBottom}>© 2014 Mina OleShoppe</p>
-      </footer>
-
-      {/* MODAL */}
       {selectedProduct && (
         <ProductModal
           product={selectedProduct}
@@ -184,10 +138,8 @@ export default function StorePage() {
         />
       )}
 
-      {/* CART */}
       <CartDrawer open={cartOpen} onClose={() => setCartOpen(false)} />
 
-      {/* FLOATING CART */}
       <button onClick={() => setCartOpen(true)} style={styles.floatingCart}>
         🛒
         {cart.length > 0 && (
@@ -200,22 +152,11 @@ export default function StorePage() {
 
 const styles = {
   page: { minHeight: "100vh", background: "#0f0f0f", color: "#fff" },
-
-  hero: {
-    padding: 40,
-    textAlign: "center",
-    borderBottom: "2px solid #d4ed00",
-  },
-
+  hero: { padding: 40, textAlign: "center", borderBottom: "2px solid #d4ed00" },
   heroTitle: { color: "#d4ed00" },
+  heroSub: { color: "#aaa" },
 
-  topBar: {
-    display: "flex",
-    gap: 12,
-    padding: 20,
-    maxWidth: 1200,
-    margin: "auto",
-  },
+  topBar: { display: "flex", gap: 12, padding: 20, maxWidth: 1200, margin: "auto" },
 
   search: {
     flex: 1,
@@ -223,6 +164,7 @@ const styles = {
     borderRadius: 999,
     background: "#1a1a1a",
     color: "#fff",
+    border: "none",
   },
 
   sort: {
@@ -230,6 +172,7 @@ const styles = {
     borderRadius: 8,
     background: "#1a1a1a",
     color: "#fff",
+    border: "none",
   },
 
   contentWrapper: {
@@ -246,6 +189,8 @@ const styles = {
     borderRadius: 12,
   },
 
+  sidebarTitle: { marginBottom: 10 },
+
   sideBtn: {
     display: "block",
     width: "100%",
@@ -253,6 +198,7 @@ const styles = {
     color: "#aaa",
     background: "transparent",
     border: "none",
+    cursor: "pointer",
   },
 
   sideBtnActive: {
@@ -268,41 +214,8 @@ const styles = {
     gap: 20,
   },
 
-  footer: {
-    background: "#111",
-    padding: 40,
-    marginTop: 40,
-  },
-
-  footerContent: {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: 40,
-  maxWidth: 1200,
-  margin: "auto",
-  alignItems: "flex-start", 
-},
-
-  footerSection: { flex: "1 1 250px" },
-
-  footerTitle: { color: "#d4ed00" },
-
-  footerText: { color: "#aaa" },
-
-  storeImages: { display: "flex", gap: 10 },
-
-  storeImg: { width: 80, height: 80 },
-
-  mapImage: {
-  width: "100%",
-  maxWidth: 420,     
-  height: 200,       
-  objectFit: "cover",
-  borderRadius: 10,
-  marginTop: 10,
-},
-
-  footerBottom: { textAlign: "center", marginTop: 20 },
+  loading: { textAlign: "center", marginTop: 50 },
+  empty: { textAlign: "center", marginTop: 50 },
 
   floatingCart: {
     position: "fixed",
@@ -312,6 +225,8 @@ const styles = {
     height: 60,
     borderRadius: "50%",
     background: "#d4ed00",
+    border: "none",
+    cursor: "pointer",
   },
 
   badge: {
