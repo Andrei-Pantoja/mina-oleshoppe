@@ -227,7 +227,7 @@ export default function StorePage() {
 
             {previewImage === mapImage && (
               <a
-                href="https://www.google.com/maps/place/Puregold+-+C.M.+Recto+(999+Shopping+Mall)"
+                href="https://www.google.com/maps/place/Puregold+-+C.M.+Recto+(999+Shttps://www.google.com/maps/place/Puregold+-+C.M.+Recto+(999+Shopping+Mall)/@14.6062437,120.9733403,221m/data=!3m1!1e3!4m6!3m5!1s0x3397ca0ede72c809:0xed3a7ecddf8971ea!8m2!3d14.6063662!4d120.9737464!16s%2Fg%2F11bc6z98w7?entry=ttu&g_ep=EgoyMDI2MDQxMy4wIKXMDSoASAFQAw%3D%3Dhopping+Mall)"
                 target="_blank"
                 rel="noreferrer"
                 style={styles.mapButton}
