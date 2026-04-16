@@ -17,6 +17,8 @@ import mapImage from "../assets/store3.png";
 const CATEGORIES = ["All", "GoPro", "Insta360", "Mounts & Clamps", "Accessories", "Other"];
 
 export default function StorePage() {
+  const isMobile = window.innerWidth < 768; // ✅ ADDED
+
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState("All");
@@ -66,6 +68,24 @@ export default function StorePage() {
       return 0;
     });
 
+  // ✅ RESPONSIVE STYLES
+  const responsiveStyles = {
+    sidebar: {
+      width: isMobile ? "100%" : 200,
+      background: "#1c1c1c",
+      padding: 16,
+      borderRadius: 12,
+    },
+
+    grid: {
+      display: "grid",
+      gridTemplateColumns: isMobile
+        ? "1fr"
+        : "repeat(auto-fill, minmax(240px, 1fr))",
+      gap: 20,
+    },
+  };
+
   return (
     <div style={styles.page}>
       <div style={styles.hero}>
@@ -95,8 +115,9 @@ export default function StorePage() {
         </select>
       </div>
 
-      <div style={styles.contentWrapper}>
-        <div style={styles.sidebar}>
+      <div style={{ ...styles.contentWrapper, flexWrap: "wrap" }}>
+        {/* ✅ SIDEBAR RESPONSIVE */}
+        <div style={responsiveStyles.sidebar}>
           <h3 style={styles.sidebarTitle}>Categories</h3>
           {CATEGORIES.map((cat) => (
             <button
@@ -122,7 +143,8 @@ export default function StorePage() {
           ) : filtered.length === 0 ? (
             <div style={styles.empty}>No products found.</div>
           ) : (
-            <div style={styles.grid}>
+            // ✅ GRID RESPONSIVE
+            <div style={responsiveStyles.grid}>
               {filtered.map((product) => (
                 <motion.div
                   key={product.id}
@@ -148,7 +170,6 @@ export default function StorePage() {
               BLDG 2 BINONDO NEAR C.M RECTO SIDE ENTRANCE
             </p>
 
-            {/* ✅ REMOVED DOUBLE CLICK */}
             <img
               src={mapImage}
               style={styles.mapImage}
@@ -204,10 +225,9 @@ export default function StorePage() {
           <div style={styles.previewBox} onClick={(e) => e.stopPropagation()}>
             <img src={previewImage} style={styles.previewImage} alt="" />
 
-            {/* ✅ UPDATED BUTTON STYLE (same as close) */}
             {previewImage === mapImage && (
               <a
-                href="https://www.google.com/maps/place/Puregold+-+C.M.+Recto+(999+Shopping+Mall)/@14.6057506,120.9724074,17z/data=!4m6!3m5!1s0x3397ca0ede72c809:0xed3a7ecddf8971ea!8m2!3d14.6063662!4d120.9737464!16s%2Fg%2F11bc6z98w7?entry=ttu&g_ep=EgoyMDI2MDQxMy4wIKXMDSoASAFQAw%3D%3D"
+                href="https://www.google.com/maps/place/Puregold+-+C.M.+Recto+(999+Shopping+Mall)"
                 target="_blank"
                 rel="noreferrer"
                 style={styles.mapButton}
@@ -246,7 +266,6 @@ export default function StorePage() {
 }
 
 const styles = {
-  // 🔥 NEW BUTTON STYLE (same look as close)
   mapButton: {
     marginTop: 15,
     background: "#d4ed00",
@@ -259,7 +278,6 @@ const styles = {
     color: "#111",
   },
 
-  // KEEP EVERYTHING ELSE SAME
   page: { background: "#0f0f0f", color: "#fff" },
   hero: { padding: 40, textAlign: "center", borderBottom: "2px solid #d4ed00" },
   heroTitle: { color: "#d4ed00" },
