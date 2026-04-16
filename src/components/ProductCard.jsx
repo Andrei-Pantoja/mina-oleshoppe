@@ -3,14 +3,22 @@ import { motion } from "framer-motion";
 import { useCart } from "../context/CartContext";
 
 export default function ProductCard({ product, onClick }) {
-  const { name, price, description, facebookUrl, category } = product;
   const { addToCart } = useCart();
 
-  const images = product.images?.length
-    ? product.images
-    : product.imageUrl
-    ? [product.imageUrl]
-    : [];
+  // ✅ SAFE FALLBACKS (prevents crash)
+  const name = product?.name || "No Name";
+  const price = Number(product?.price) || 0;
+  const description = product?.description || "";
+  const facebookUrl = product?.facebookUrl || "";
+  const category = product?.category || "";
+
+  // ✅ HANDLE IMAGES SAFELY
+  const images =
+    product?.images?.length > 0
+      ? product.images
+      : product?.imageUrl
+      ? [product.imageUrl]
+      : [];
 
   const [currentIndex, setCurrentIndex] = useState(0);
 
@@ -20,11 +28,13 @@ export default function ProductCard({ product, onClick }) {
 
   const goPrev = (e) => {
     e.stopPropagation();
+    if (images.length === 0) return;
     setCurrentIndex((prev) => (prev - 1 + images.length) % images.length);
   };
 
   const goNext = (e) => {
     e.stopPropagation();
+    if (images.length === 0) return;
     setCurrentIndex((prev) => (prev + 1) % images.length);
   };
 
@@ -94,11 +104,11 @@ export default function ProductCard({ product, onClick }) {
         {/* PRICE + BUTTONS */}
         <div style={styles.footer}>
           <span style={styles.price}>
-            ₱{Number(price).toLocaleString()}
+            ₱{price.toLocaleString()}
           </span>
 
           <div style={styles.actions}>
-            {/* CART ICON */}
+            {/* CART */}
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -218,11 +228,6 @@ const styles = {
     color: "#fff",
     margin: 0,
     minHeight: 40,
-  },
-
-  meta: {
-    fontSize: 12,
-    color: "#aaa",
   },
 
   desc: {
