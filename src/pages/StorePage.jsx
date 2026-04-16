@@ -1,3 +1,5 @@
+// SAME IMPORTS (unchanged)
+
 import { useEffect, useState } from "react";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../firebase/config";
@@ -23,24 +25,21 @@ export default function StorePage() {
   const [cartOpen, setCartOpen] = useState(false);
   const [sortOption, setSortOption] = useState("Newest");
 
+  const [previewImage, setPreviewImage] = useState(null);
+
   const { cart } = useCart();
 
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        // ✅ FIX: correct collection name
         const snap = await getDocs(collection(db, "products"));
-
         const data = snap.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
         }));
-
-        console.log("🔥 FIREBASE DATA:", data); // DEBUG
-
         setProducts(data);
       } catch (err) {
-        console.error("❌ Error fetching products:", err);
+        console.error(err);
       } finally {
         setLoading(false);
       }
@@ -49,16 +48,12 @@ export default function StorePage() {
     fetchProducts();
   }, []);
 
-  // ✅ FILTER + SAFE CHECKS
   const filtered = products
     .filter((p) => {
       if (!p) return false;
-
       const matchCat = activeCategory === "All" || p.category === activeCategory;
-
       const matchSearch =
         (p.name || "").toLowerCase().includes(search.toLowerCase());
-
       return matchCat && matchSearch;
     })
     .sort((a, b) => {
@@ -73,7 +68,6 @@ export default function StorePage() {
 
   return (
     <div style={styles.page}>
-      {/* HERO */}
       <div style={styles.hero}>
         <h1 style={styles.heroTitle}>🎥 Action Camera Accessories</h1>
         <p style={styles.heroSub}>
@@ -81,7 +75,6 @@ export default function StorePage() {
         </p>
       </div>
 
-      {/* TOP BAR */}
       <div style={styles.topBar}>
         <input
           type="text"
@@ -103,7 +96,6 @@ export default function StorePage() {
       </div>
 
       <div style={styles.contentWrapper}>
-        {/* SIDEBAR */}
         <div style={styles.sidebar}>
           <h3 style={styles.sidebarTitle}>Categories</h3>
           {CATEGORIES.map((cat) => (
@@ -120,26 +112,20 @@ export default function StorePage() {
           ))}
         </div>
 
-        {/* PRODUCTS */}
         <div style={styles.mainContent}>
           <p style={{ marginBottom: 10, color: "#888" }}>
             {filtered.length} products found
           </p>
 
           {loading ? (
-            <div style={styles.loading}>Loading products...</div>
+            <div style={styles.loading}>Loading...</div>
           ) : filtered.length === 0 ? (
-            <div style={styles.empty}>
-              ❌ No products found. Check Firebase data.
-            </div>
+            <div style={styles.empty}>No products found.</div>
           ) : (
             <div style={styles.grid}>
               {filtered.map((product) => (
                 <motion.div
                   key={product.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3 }}
                   onClick={() => setSelectedProduct(product)}
                   style={{ cursor: "pointer" }}
                 >
@@ -157,19 +143,44 @@ export default function StorePage() {
           <div style={styles.footerSection}>
             <h3 style={styles.footerTitle}>📍 Our Store</h3>
             <p style={styles.footerText}>
-              Mina OleShoppe<br />
+              Facebook Page: Mina OleShoppe<br />
               Located in 999 Shopping Mall / Pasilio 2G-09 <br />
               BLDG 2 BINONDO NEAR C.M RECTO SIDE ENTRANCE
             </p>
-            <img src={mapImage} style={styles.mapImage} alt="map" />
+
+            {/* ✅ REMOVED DOUBLE CLICK */}
+            <img
+              src={mapImage}
+              style={styles.mapImage}
+              alt="map"
+              onClick={() => setPreviewImage(mapImage)}
+              onMouseOver={(e) =>
+                (e.currentTarget.style.boxShadow = "0 0 12px #d4ed00")
+              }
+              onMouseOut={(e) =>
+                (e.currentTarget.style.boxShadow = "0 0 0 transparent")
+              }
+            />
           </div>
 
           <div style={styles.footerSection}>
             <h3 style={styles.footerTitle}>🏬 Store Preview</h3>
             <div style={styles.storeImages}>
-              <img src={store1} style={styles.storeImg} alt="" />
-              <img src={store2} style={styles.storeImg} alt="" />
-              <img src={store3} style={styles.storeImg} alt="" />
+              {[store1, store2, store3].map((img, i) => (
+                <img
+                  key={i}
+                  src={img}
+                  style={styles.storeImg}
+                  onClick={() => setPreviewImage(img)}
+                  onMouseOver={(e) =>
+                    (e.currentTarget.style.boxShadow = "0 0 10px #d4ed00")
+                  }
+                  onMouseOut={(e) =>
+                    (e.currentTarget.style.boxShadow = "0 0 0 transparent")
+                  }
+                  alt=""
+                />
+              ))}
             </div>
           </div>
 
@@ -187,7 +198,34 @@ export default function StorePage() {
         <p style={styles.footerBottom}>© 2014 Mina OleShoppe</p>
       </footer>
 
-      {/* MODAL */}
+      {/* PREVIEW MODAL */}
+      {previewImage && (
+        <div style={styles.previewOverlay} onClick={() => setPreviewImage(null)}>
+          <div style={styles.previewBox} onClick={(e) => e.stopPropagation()}>
+            <img src={previewImage} style={styles.previewImage} alt="" />
+
+            {/* ✅ UPDATED BUTTON STYLE (same as close) */}
+            {previewImage === mapImage && (
+              <a
+                href="https://www.google.com/maps/place/Puregold+-+C.M.+Recto+(999+Shopping+Mall)/@14.6057506,120.9724074,17z/data=!4m6!3m5!1s0x3397ca0ede72c809:0xed3a7ecddf8971ea!8m2!3d14.6063662!4d120.9737464!16s%2Fg%2F11bc6z98w7?entry=ttu&g_ep=EgoyMDI2MDQxMy4wIKXMDSoASAFQAw%3D%3D"
+                target="_blank"
+                rel="noreferrer"
+                style={styles.mapButton}
+              >
+                📍 Check location on Google Maps
+              </a>
+            )}
+
+            <button
+              style={styles.previewClose}
+              onClick={() => setPreviewImage(null)}
+            >
+              ✕ Close
+            </button>
+          </div>
+        </div>
+      )}
+
       {selectedProduct && (
         <ProductModal
           product={selectedProduct}
@@ -195,10 +233,8 @@ export default function StorePage() {
         />
       )}
 
-      {/* CART */}
       <CartDrawer open={cartOpen} onClose={() => setCartOpen(false)} />
 
-      {/* FLOATING CART */}
       <button onClick={() => setCartOpen(true)} style={styles.floatingCart}>
         🛒
         {cart.length > 0 && (
@@ -210,103 +246,56 @@ export default function StorePage() {
 }
 
 const styles = {
-  page: { minHeight: "100vh", background: "#0f0f0f", color: "#fff" },
+  // 🔥 NEW BUTTON STYLE (same look as close)
+  mapButton: {
+    marginTop: 15,
+    background: "#d4ed00",
+    border: "none",
+    borderRadius: 999,
+    padding: "10px 20px",
+    cursor: "pointer",
+    fontWeight: "bold",
+    textDecoration: "none",
+    color: "#111",
+  },
+
+  // KEEP EVERYTHING ELSE SAME
+  page: { background: "#0f0f0f", color: "#fff" },
   hero: { padding: 40, textAlign: "center", borderBottom: "2px solid #d4ed00" },
   heroTitle: { color: "#d4ed00" },
   heroSub: { color: "#aaa" },
 
-  topBar: {
-    display: "flex",
-    gap: 12,
-    padding: 20,
-    maxWidth: 1200,
-    margin: "auto",
-  },
+  topBar: { display: "flex", gap: 12, padding: 20, maxWidth: 1200, margin: "auto" },
+  search: { flex: 1, padding: 14, borderRadius: 999, background: "#1a1a1a", color: "#fff", border: "none" },
+  sort: { padding: 10, borderRadius: 8, background: "#1a1a1a", color: "#fff", border: "none" },
 
-  search: {
-    flex: 1,
-    padding: 14,
-    borderRadius: 999,
-    background: "#1a1a1a",
-    color: "#fff",
-    border: "none",
-  },
-
-  sort: {
-    padding: 10,
-    borderRadius: 8,
-    background: "#1a1a1a",
-    color: "#fff",
-    border: "none",
-  },
-
-  contentWrapper: {
-    display: "flex",
-    gap: 20,
-    maxWidth: 1200,
-    margin: "auto",
-  },
-
-  sidebar: {
-    width: 200,
-    background: "#1c1c1c",
-    padding: 16,
-    borderRadius: 12,
-  },
-
-  sideBtn: {
-    display: "block",
-    width: "100%",
-    padding: 10,
-    color: "#aaa",
-    background: "transparent",
-    border: "none",
-    cursor: "pointer",
-  },
-
-  sideBtnActive: {
-    background: "#d4ed00",
-    color: "#111",
-  },
+  contentWrapper: { display: "flex", gap: 20, maxWidth: 1200, margin: "auto", padding: 20 },
+  sidebar: { width: 200, background: "#1c1c1c", padding: 16, borderRadius: 12 },
+  sideBtn: { width: "100%", padding: 10, color: "#aaa", background: "transparent", border: "none", cursor: "pointer" },
+  sideBtnActive: { background: "#d4ed00", color: "#111" },
 
   mainContent: { flex: 1 },
-
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
-    gap: 20,
-  },
-
-  loading: { color: "#aaa" },
-  empty: { color: "#ff5555" },
+  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 20 },
 
   footer: { background: "#111", padding: 40, marginTop: 40 },
+  footerContent: { display: "flex", flexWrap: "wrap", gap: 40, maxWidth: 1200, margin: "auto" },
+  footerSection: { flex: "1 1 300px" },
 
-  footerContent: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 40,
-    maxWidth: 1200,
-    margin: "auto",
-  },
-
-  footerSection: { flex: "1 1 250px" },
   footerTitle: { color: "#d4ed00" },
   footerText: { color: "#aaa" },
 
   storeImages: { display: "flex", gap: 10 },
-  storeImg: { width: 80, height: 80 },
+  storeImg: { width: 80, height: 80, cursor: "pointer", borderRadius: 6 },
 
   mapImage: {
     width: "100%",
-    maxWidth: 420,
     height: 200,
     objectFit: "cover",
+    cursor: "pointer",
     borderRadius: 10,
-    marginTop: 10,
   },
 
-  footerBottom: { textAlign: "center", marginTop: 20 },
+  footerBottom: { textAlign: "center", marginTop: 20, color: "#555" },
 
   floatingCart: {
     position: "fixed",
@@ -317,7 +306,6 @@ const styles = {
     borderRadius: "50%",
     background: "#d4ed00",
     border: "none",
-    cursor: "pointer",
   },
 
   badge: {
@@ -328,5 +316,43 @@ const styles = {
     color: "#fff",
     borderRadius: "50%",
     padding: "2px 6px",
+  },
+
+  previewOverlay: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+    background: "rgba(0,0,0,0.85)",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 2000,
+  },
+
+  previewBox: {
+    maxWidth: "70%",
+    maxHeight: "80%",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+  },
+
+  previewImage: {
+    width: "100%",
+    maxHeight: "75vh",
+    objectFit: "contain",
+    borderRadius: 12,
+  },
+
+  previewClose: {
+    marginTop: 15,
+    background: "#d4ed00",
+    border: "none",
+    borderRadius: 999,
+    padding: "10px 20px",
+    cursor: "pointer",
+    fontWeight: "bold",
   },
 };
