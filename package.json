@@ -2,7 +2,7 @@
   "name": "mina-oleshoppe",
   "version": "1.0.0",
   "private": true,
-  "homepage": "https://andrei-pantoja.github.io/mina-oleshoppe/",
+  "homepage": ".",
   "dependencies": {
     "firebase": "^10.7.0",
     "framer-motion": "^12.38.0",

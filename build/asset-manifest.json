@@ -1,15 +1,15 @@
 {
   "files": {
-    "main.js": "/mina-oleshoppe/static/js/main.9274ff0d.js",
-    "static/media/store1.png": "/mina-oleshoppe/static/media/store1.77ed4384be537f8c14b1.png",
-    "static/media/store3.png": "/mina-oleshoppe/static/media/store3.8b4049bf67d938a03abb.png",
-    "static/media/store2.png": "/mina-oleshoppe/static/media/store2.553913386a7b89873c09.png",
-    "static/media/minashop.png": "/mina-oleshoppe/static/media/minashop.08ec4738d0a2e576e873.png",
-    "static/media/admin-logo.png": "/mina-oleshoppe/static/media/admin-logo.68a5315c00e942b88645.png",
-    "index.html": "/mina-oleshoppe/index.html",
-    "main.9274ff0d.js.map": "/mina-oleshoppe/static/js/main.9274ff0d.js.map"
+    "main.js": "./static/js/main.9f18232a.js",
+    "static/media/store1.png": "./static/media/store1.77ed4384be537f8c14b1.png",
+    "static/media/store3.png": "./static/media/store3.8b4049bf67d938a03abb.png",
+    "static/media/store2.png": "./static/media/store2.553913386a7b89873c09.png",
+    "static/media/minashop.png": "./static/media/minashop.08ec4738d0a2e576e873.png",
+    "static/media/admin-logo.png": "./static/media/admin-logo.68a5315c00e942b88645.png",
+    "index.html": "./index.html",
+    "main.9f18232a.js.map": "./static/js/main.9f18232a.js.map"
   },
   "entrypoints": [
-    "static/js/main.9274ff0d.js"
+    "static/js/main.9f18232a.js"
   ]
 }
