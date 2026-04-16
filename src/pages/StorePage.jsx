@@ -29,7 +29,7 @@ export default function StorePage() {
     const fetchProducts = async () => {
       try {
         // ✅ FIX: correct collection name
-        const snap = await getDocs(collection(db, "Items"));
+        const snap = await getDocs(collection(db, "products"));
 
         const data = snap.docs.map((doc) => ({
           id: doc.id,
