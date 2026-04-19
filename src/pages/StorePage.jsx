@@ -16,8 +16,19 @@ import mapImage from "../assets/store3.png";
 
 const CATEGORIES = ["All", "GoPro", "Insta360", "Mounts & Clamps", "Accessories", "Other"];
 
+// Picks the most common seller messenger link from cart items
+function getMostCommonSellerUrl(cartItems) {
+  if (!cartItems || cartItems.length === 0) return "https://m.me/Sithis02";
+  const counts = {};
+  cartItems.forEach((item) => {
+    const url = item.facebookUrl || "https://m.me/Sithis02";
+    counts[url] = (counts[url] || 0) + (item.quantity || 1);
+  });
+  return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+}
+
 export default function StorePage() {
-  const isMobile = window.innerWidth < 768; // ✅ ADDED
+  const isMobile = window.innerWidth < 768;
 
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -67,6 +78,26 @@ export default function StorePage() {
       }
       return 0;
     });
+
+  // Build messenger checkout message and redirect
+  const handleCheckout = () => {
+    if (!cart || cart.length === 0) return;
+
+    const lines = cart.map(
+      (item) =>
+        `• ${item.name} x${item.quantity || 1} - ₱${(Number(item.price) * (item.quantity || 1)).toLocaleString()}`
+    );
+    const total = cart.reduce(
+      (sum, item) => sum + Number(item.price) * (item.quantity || 1),
+      0
+    );
+
+    const message = `Hello! I want to inquire:\n${lines.join("\n")}\nTotal: ₱${total.toLocaleString()}`;
+    const sellerUrl = getMostCommonSellerUrl(cart);
+    const encoded = encodeURIComponent(message);
+    const messengerUrl = `${sellerUrl}?text=${encoded}`;
+    window.open(messengerUrl, "_blank");
+  };
 
   // ✅ RESPONSIVE STYLES
   const responsiveStyles = {
@@ -165,7 +196,17 @@ export default function StorePage() {
           <div style={styles.footerSection}>
             <h3 style={styles.footerTitle}>📍 Our Store</h3>
             <p style={styles.footerText}>
-              Facebook Page: Mina OleShoppe<br />
+              {/* Clickable Facebook page */}
+              Facebook Page:{" "}
+              <a
+                href="https://www.facebook.com/MinaOnlineShoppee"
+                target="_blank"
+                rel="noreferrer"
+                style={styles.fbPageLink}
+              >
+                Mina OleShoppe
+              </a>
+              <br />
               Located in 999 Shopping Mall / Pasilio 2G-09 <br />
               BLDG 2 BINONDO NEAR C.M RECTO SIDE ENTRANCE
             </p>
@@ -227,7 +268,7 @@ export default function StorePage() {
 
             {previewImage === mapImage && (
               <a
-                href="https://www.google.com/maps/place/Puregold+-+C.M.+Recto+(999+Shttps://www.google.com/maps/place/Puregold+-+C.M.+Recto+(999+Shopping+Mall)/@14.6062437,120.9733403,221m/data=!3m1!1e3!4m6!3m5!1s0x3397ca0ede72c809:0xed3a7ecddf8971ea!8m2!3d14.6063662!4d120.9737464!16s%2Fg%2F11bc6z98w7?entry=ttu&g_ep=EgoyMDI2MDQxMy4wIKXMDSoASAFQAw%3D%3Dhopping+Mall)"
+                href="https://www.google.com/maps/place/Puregold+-+C.M.+Recto+(999+Shopping+Mall)/@14.6062437,120.9733403,221m/data=!3m1!1e3!4m6!3m5!1s0x3397ca0ede72c809:0xed3a7ecddf8971ea!8m2!3d14.6063662!4d120.9737464!16s%2Fg%2F11bc6z98w7?entry=ttu&g_ep=EgoyMDI2MDQxMy4wIKXMDSoASAFQAw%3D%3D"
                 target="_blank"
                 rel="noreferrer"
                 style={styles.mapButton}
@@ -253,7 +294,12 @@ export default function StorePage() {
         />
       )}
 
-      <CartDrawer open={cartOpen} onClose={() => setCartOpen(false)} />
+      {/* Pass handleCheckout to CartDrawer */}
+      <CartDrawer
+        open={cartOpen}
+        onClose={() => setCartOpen(false)}
+        onCheckout={handleCheckout}
+      />
 
       <button onClick={() => setCartOpen(true)} style={styles.floatingCart}>
         🛒
@@ -301,6 +347,13 @@ const styles = {
 
   footerTitle: { color: "#d4ed00" },
   footerText: { color: "#aaa" },
+
+  fbPageLink: {
+    color: "#d4ed00",
+    textDecoration: "underline",
+    cursor: "pointer",
+    fontWeight: "bold",
+  },
 
   storeImages: { display: "flex", gap: 10 },
   storeImg: { width: 80, height: 80, cursor: "pointer", borderRadius: 6 },

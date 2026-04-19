@@ -50,7 +50,6 @@ export default function ProductModal({ product, onClose }) {
             <p style={styles.desc}>{product.description}</p>
           </div>
 
-          {/* BOTTOM BUTTON ROW */}
           <div style={styles.bottomArea}>
             <div style={styles.buttonRow}>
               <button
@@ -97,27 +96,32 @@ const styles = {
     justifyContent: "center",
     alignItems: "center",
     zIndex: 999,
+    padding: 10, // 🔥 prevent edge cut on mobile
   },
 
   modal: {
     background: "#1a1a1a",
     borderRadius: 12,
-    padding: 20,
     display: "flex",
-    gap: 20,
-    maxWidth: 800,
-    width: "90%",
+    flexDirection: "column", // 🔥 MOBILE FIRST
+    width: "100%",
+    maxWidth: 500,
+    maxHeight: "90vh", // 🔥 prevent overflow
+    overflowY: "auto", // 🔥 scroll inside modal
   },
 
   imageWrapper: {
     position: "relative",
+    width: "100%",
   },
 
   image: {
-    width: 300,
-    height: 300,
+    width: "100%", // 🔥 responsive
+    height: "auto",
+    maxHeight: 300,
     objectFit: "cover",
-    borderRadius: 10,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
   },
 
   arrowLeft: {
@@ -149,17 +153,18 @@ const styles = {
   },
 
   info: {
-    flex: 1,
+    padding: 15,
     display: "flex",
     flexDirection: "column",
-    justifyContent: "space-between", // 🔥 pushes buttons down
+    justifyContent: "space-between",
+    gap: 10,
   },
 
-  name: { color: "#fff" },
+  name: { color: "#fff", fontSize: 18 },
 
   price: {
     color: "#d4ed00",
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 700,
   },
 
@@ -169,7 +174,7 @@ const styles = {
   },
 
   bottomArea: {
-    marginTop: 20,
+    marginTop: 10,
   },
 
   buttonRow: {
@@ -179,7 +184,7 @@ const styles = {
 
   addBtn: {
     flex: 1,
-    padding: "10px",
+    padding: "12px", 
     background: "#d4ed00",
     border: "none",
     borderRadius: 8,
@@ -191,7 +196,7 @@ const styles = {
     flex: 1,
     background: "#d4ed00",
     color: "#111",
-    padding: "10px",
+    padding: "12px",
     borderRadius: 8,
     textDecoration: "none",
     fontWeight: 600,
@@ -204,7 +209,7 @@ const styles = {
     background: "none",
     border: "1px solid #444",
     color: "#aaa",
-    padding: "8px",
+    padding: "10px",
     borderRadius: 6,
     cursor: "pointer",
   },

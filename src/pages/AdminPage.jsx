@@ -10,9 +10,15 @@ import { useAuth } from "../context/AuthContext";
 
 const CATEGORIES = ["GoPro", "Insta360", "Mounts & Clamps", "Accessories", "Other"];
 
+const SELLERS = [
+  { label: "Sithis", url: "https://m.me/Sithis02" },
+  { label: "Saira", url: "https://m.me/sairachandesu2003" },
+  { label: "Drei", url: "https://m.me/Dreiu00" },
+];
+
 const EMPTY_FORM = {
   name: "", price: "", description: "",
-  imageUrl: "", images: [], facebookUrl: "", category: "Accessories",
+  images: [], facebookUrl: SELLERS[0].url, category: "Accessories",
 };
 
 export default function AdminPage() {
@@ -30,14 +36,11 @@ export default function AdminPage() {
   const [statusMessage, setStatusMessage] = useState(null);
   const [adminSearch, setAdminSearch] = useState("");
 
+  const showPopup = (msg) => {
+    setStatusMessage(msg);
+    setTimeout(() => setStatusMessage(null), 3000);
+  };
 
-// This function handles showing the message
-const showPopup = (msg) => {
-  setStatusMessage(msg);
-  setTimeout(() => setStatusMessage(null), 3000); 
-};
-
-  // Redirect if not admin
   useEffect(() => {
     if (!user) navigate("/");
   }, [user, navigate]);
@@ -60,11 +63,6 @@ const showPopup = (msg) => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((current) => ({ ...current, [name]: value }));
-    if (name === "imageUrl" && value) {
-      setForm((current) => ({ ...current, images: [] }));
-      setImageFiles([]);
-      setPreviewUrls([]);
-    }
   };
 
   const handleFileChange = (e) => {
@@ -76,7 +74,7 @@ const showPopup = (msg) => {
     }
     setImageFiles(files);
     setPreviewUrls(files.map((file) => URL.createObjectURL(file)));
-    setForm((current) => ({ ...current, imageUrl: "", images: [] }));
+    setForm((current) => ({ ...current, images: [] }));
   };
 
   const removePreviewImage = (index) => {
@@ -85,7 +83,6 @@ const showPopup = (msg) => {
       setPreviewUrls((current) => current.filter((_, idx) => idx !== index));
       return;
     }
-
     setForm((current) => ({
       ...current,
       images: current.images?.filter((_, idx) => idx !== index) || [],
@@ -106,29 +103,27 @@ const showPopup = (msg) => {
           return getDownloadURL(snapshot.ref);
         });
         finalImageUrls = await Promise.all(uploadPromises);
-      } else if (form.imageUrl) {
-        finalImageUrls = [form.imageUrl];
       }
 
       const productData = {
         ...form,
         images: finalImageUrls,
-        imageUrl: finalImageUrls[0] || "", // This makes sure the first image is always the main one
+        imageUrl: finalImageUrls[0] || "",
         price: Number(form.price),
       };
 
       if (editingId) {
-       await updateDoc(doc(db, "products", editingId), {
-        ...productData,
-        updatedAt: serverTimestamp(),
-      });
-       showPopup("✅ Product updated!");
+        await updateDoc(doc(db, "products", editingId), {
+          ...productData,
+          updatedAt: serverTimestamp(),
+        });
+        showPopup("✅ Product updated!");
       } else {
-       await addDoc(collection(db, "products"), {
-       ...productData,
-       createdAt: serverTimestamp(),
-      });
-       showPopup("✅ Product added successfully!");
+        await addDoc(collection(db, "products"), {
+          ...productData,
+          createdAt: serverTimestamp(),
+        });
+        showPopup("✅ Product added successfully!");
       }
       setForm(EMPTY_FORM);
       setImageFiles([]);
@@ -148,9 +143,8 @@ const showPopup = (msg) => {
       name: product.name || "",
       price: product.price || "",
       description: product.description || "",
-      imageUrl: product.imageUrl || "",
       images: product.images || (product.imageUrl ? [product.imageUrl] : []),
-      facebookUrl: product.facebookUrl || "",
+      facebookUrl: product.facebookUrl || SELLERS[0].url,
       category: product.category || "Accessories",
     });
     setImageFiles([]);
@@ -178,14 +172,20 @@ const showPopup = (msg) => {
     setShowForm(false);
   };
 
+  // Get seller label from URL
+  const getSellerLabel = (url) => {
+    const found = SELLERS.find((s) => s.url === url);
+    return found ? found.label : url;
+  };
+
   if (!user) return null;
 
   return (
     <div style={styles.page}>
       {statusMessage && (
-      <div style={styles.statusPopup}>
-       {statusMessage}
-      </div>
+        <div style={styles.statusPopup}>
+          {statusMessage}
+        </div>
       )}
       <div style={styles.header}>
         <div>
@@ -233,17 +233,11 @@ const showPopup = (msg) => {
             </div>
 
             <div style={styles.row}>
-              <label style={styles.label}>Image URL</label>
-              <input name="imageUrl" value={form.imageUrl} onChange={handleChange}
-                placeholder="https://... (direct image link)" style={styles.input} />
-            </div>
-
-            <div style={styles.row}>
               <label style={styles.label}>Upload Images</label>
               <input type="file" accept="image/*" multiple onChange={handleFileChange} style={styles.fileInput} />
             </div>
 
-            {(previewUrls.length > 0 || form.images?.length > 0 || form.imageUrl) && (
+            {(previewUrls.length > 0 || form.images?.length > 0) && (
               <div style={styles.imagePreviewGrid}>
                 {previewUrls.length > 0
                   ? previewUrls.map((url, idx) => (
@@ -256,23 +250,26 @@ const showPopup = (msg) => {
                   ? form.images.map((url, idx) => (
                       <div key={idx} style={styles.previewWrapper}>
                         <button type="button" onClick={() => removePreviewImage(idx)} style={styles.removePreviewBtn}>×</button>
-                        <img key={idx} src={url} alt={`preview-${idx}`} style={styles.previewThumb} />
+                        <img src={url} alt={`saved-${idx}`} style={styles.previewThumb} />
                       </div>
                     ))
-                  : form.imageUrl && (
-                      <div style={styles.previewWrapper}>
-                        <button type="button" onClick={() => setForm((current) => ({ ...current, imageUrl: "" }))} style={styles.removePreviewBtn}>×</button>
-                        <img src={form.imageUrl} alt="preview" style={styles.previewThumb}
-                          onError={(e) => e.target.style.display = "none"} />
-                      </div>
-                    )}
+                  : null}
               </div>
             )}
 
+            {/* Seller Selector */}
             <div style={styles.row}>
-              <label style={styles.label}>Facebook Link (for "Inquire" button)</label>
-              <input name="facebookUrl" value={form.facebookUrl} onChange={handleChange}
-                placeholder="https://facebook.com/your-page or messenger link" style={styles.input} />
+              <label style={styles.label}>Assign Seller</label>
+              <select
+                name="facebookUrl"
+                value={form.facebookUrl}
+                onChange={handleChange}
+                style={styles.input}
+              >
+                {SELLERS.map((s) => (
+                  <option key={s.label} value={s.url}>{s.label}</option>
+                ))}
+              </select>
             </div>
 
             <div style={styles.btnRow}>
@@ -290,11 +287,11 @@ const showPopup = (msg) => {
       {/* Products Table */}
       <div style={styles.tableWrap}>
         <input
-        type="text"
-        placeholder="Search products..."
-        value={adminSearch}
-        onChange={(e) => setAdminSearch(e.target.value)}
-        style={styles.search}
+          type="text"
+          placeholder="Search products..."
+          value={adminSearch}
+          onChange={(e) => setAdminSearch(e.target.value)}
+          style={styles.search}
         />
         <h2 style={styles.sectionTitle}>All Products ({products.length})</h2>
 
@@ -306,33 +303,33 @@ const showPopup = (msg) => {
           <div style={styles.productList}>
             {products
               .filter((p) =>
-               p.name?.toLowerCase().includes(adminSearch.toLowerCase())
+                p.name?.toLowerCase().includes(adminSearch.toLowerCase())
               )
               .map((p) => (
-              <div key={p.id} style={styles.productRow}>
-                <img
-                  src={(p.images?.[0] || p.imageUrl) || "https://via.placeholder.com/60x60?text=?"}
-                  alt={p.name}
-                  style={styles.thumb}
-                  onError={(e) => e.target.src = "https://via.placeholder.com/60x60?text=?"}
-                />
-                <div style={styles.productInfo}>
-                  <span style={styles.productName}>{p.name}</span>
-                  <span style={styles.productMeta}>
-                    {p.category} · ₱{Number(p.price).toLocaleString()}
-                  </span>
-                  {p.facebookUrl && (
-                    <a href={p.facebookUrl} target="_blank" rel="noreferrer" style={styles.fbLink}>
-                      🔗 Facebook link set
-                    </a>
-                  )}
+                <div key={p.id} style={styles.productRow}>
+                  <img
+                    src={(p.images?.[0] || p.imageUrl) || "https://via.placeholder.com/60x60?text=?"}
+                    alt={p.name}
+                    style={styles.thumb}
+                    onError={(e) => e.target.src = "https://via.placeholder.com/60x60?text=?"}
+                  />
+                  <div style={styles.productInfo}>
+                    <span style={styles.productName}>{p.name}</span>
+                    <span style={styles.productMeta}>
+                      {p.category} · ₱{Number(p.price).toLocaleString()}
+                    </span>
+                    {p.facebookUrl && (
+                      <span style={styles.sellerTag}>
+                        👤 Seller: {getSellerLabel(p.facebookUrl)}
+                      </span>
+                    )}
+                  </div>
+                  <div style={styles.actions}>
+                    <button onClick={() => handleEdit(p)} style={styles.editBtn}>Edit</button>
+                    <button onClick={() => handleDelete(p.id, p.name)} style={styles.deleteBtn}>Delete</button>
+                  </div>
                 </div>
-                <div style={styles.actions}>
-                  <button onClick={() => handleEdit(p)} style={styles.editBtn}>Edit</button>
-                  <button onClick={() => handleDelete(p.id, p.name)} style={styles.deleteBtn}>Delete</button>
-                </div>
-              </div>
-            ))}
+              ))}
           </div>
         )}
       </div>
@@ -351,25 +348,25 @@ const styles = {
     margin: "0 auto",
   },
   search: {
-  width: "100%",
-  padding: "10px 12px",
-  marginBottom: 16,
-  borderRadius: 8,
-  border: "1px solid #333",
-  background: "#111",
-  color: "#fff",
-},
+    width: "100%",
+    padding: "10px 12px",
+    marginBottom: 16,
+    borderRadius: 8,
+    border: "1px solid #333",
+    background: "#111",
+    color: "#fff",
+  },
   statusPopup: {
-  position: "fixed",
-  top: "20px",
-  left: "50%",
-  transform: "translateX(-50%)",
-  background: "#d4ed00", // That bright yellow you're using
-  color: "#111",
-  padding: "12px 24px",
-  borderRadius: "10px",
-  fontWeight: "bold",
-  zIndex: 9999, // Makes sure it stays on top of everything
+    position: "fixed",
+    top: "20px",
+    left: "50%",
+    transform: "translateX(-50%)",
+    background: "#d4ed00",
+    color: "#111",
+    padding: "12px 24px",
+    borderRadius: "10px",
+    fontWeight: "bold",
+    zIndex: 9999,
   },
   header: {
     display: "flex",
@@ -506,7 +503,7 @@ const styles = {
   },
   productName: { fontWeight: 600, fontSize: 15 },
   productMeta: { fontSize: 13, color: "#888" },
-  fbLink: { fontSize: 12, color: "#4a9eff", textDecoration: "none" },
+  sellerTag: { fontSize: 12, color: "#d4ed00" },
   actions: { display: "flex", gap: 8 },
   editBtn: {
     background: "none",

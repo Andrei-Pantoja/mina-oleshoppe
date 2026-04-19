@@ -18,28 +18,31 @@ export default function Navbar() {
   return (
     <>
       <nav style={styles.nav}>
+        {/* LEFT: Logo */}
         <Link to="/" style={styles.brand}>
           <img src={logo} alt="Mina OleShoppe" style={styles.logo} />
           <span style={styles.brandText}>Mina OleShoppe</span>
         </Link>
 
+        {/* RIGHT: Admin / Login */}
         <div style={styles.right}>
-          <span style={styles.tagline}>Action Camera Accessories</span>
-
           {user ? (
             <div style={styles.adminBar}>
-              <Link to="/admin" style={styles.adminLink}>Dashboard</Link>
-              <button onClick={handleLogout} style={styles.logoutBtn}>Logout</button>
+              <Link to="/admin" style={styles.adminLink}>
+                Dashboard
+              </Link>
+              <button onClick={handleLogout} style={styles.logoutBtn}>
+                Logout
+              </button>
             </div>
           ) : (
-            // Small, subtle admin button — not obvious to regular visitors
             <button
-             onClick={() => setShowLogin(true)}
-             style={styles.hiddenAdminBtn}
-             title="Admin"
-          >
-            <img src={adminLogo} alt="Admin" style={styles.adminIcon} />
-          </button>
+              onClick={() => setShowLogin(true)}
+              style={styles.hiddenAdminBtn}
+              title="Admin"
+            >
+              <img src={adminLogo} alt="Admin" style={styles.adminIcon} />
+            </button>
           )}
         </div>
       </nav>
@@ -53,79 +56,78 @@ const styles = {
   nav: {
     display: "flex",
     alignItems: "center",
-    justifyContent: "space-between",
-    padding: "16px 32px",
-    backgroundColor: "#1a1a1a",
-    borderBottom: "3px solid #d4ed00",
-    position: "sticky",
-    top: 0,
-    zIndex: 100,
+    padding: "10px 16px",
+    borderBottom: "2px solid #d4ed00",
+    width: "100%",
   },
+
   brand: {
     display: "flex",
     alignItems: "center",
-    gap: 16,
+    gap: 8,
     textDecoration: "none",
+    minWidth: 0, // 🔥 prevents overflow
   },
+
   logo: {
-    width: 64,
-    height: 64,
+    width: 40, // 🔥 smaller for mobile
+    height: 40,
     borderRadius: "50%",
     objectFit: "cover",
   },
+
   brandText: {
     color: "#d4ed00",
     fontWeight: 700,
-    fontSize: 22,
-    letterSpacing: 1,
+    fontSize: 16, // 🔥 mobile-friendly
+    letterSpacing: 0.5,
   },
+
   right: {
     display: "flex",
     alignItems: "center",
-    gap: 16,
+    marginLeft: "auto", // 🔥 pushes to right
   },
-  tagline: {
-    color: "#888",
-    fontSize: 13,
-  },
-  hiddenAdminBtn: {
-  background: "transparent",
-  border: "1px solid rgba(212, 237, 0, 0.4)",
-  padding: 4,
-  borderRadius: "50%",
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  transition: "0.2s",
-},
-hiddenAdminBtnHover: {
-  boxShadow: "0 0 8px rgba(212, 237, 0, 0.6)",
-},
-adminIcon: {
-  width: 28,
-  height: 28,
-  borderRadius: "50%",
-  objectFit: "cover",
-},
+
   adminBar: {
     display: "flex",
-    alignItems: "center",
-    gap: 12,
+    flexDirection: "column", // Dashboard above Logout
+    alignItems: "flex-end",
+    gap: 6,
   },
+
   adminLink: {
     color: "#d4ed00",
     fontWeight: 600,
-    fontSize: 14,
+    fontSize: 12,
     textDecoration: "none",
   },
+
   logoutBtn: {
     background: "none",
     border: "1px solid #555",
     color: "#aaa",
     borderRadius: 6,
-    padding: "4px 12px",
+    padding: "4px 10px",
     cursor: "pointer",
-    fontSize: 13,
+    fontSize: 11,
+  },
+
+  hiddenAdminBtn: {
+    background: "transparent",
+    border: "1px solid rgba(212, 237, 0, 0.4)",
+    padding: 4,
+    borderRadius: "50%",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  adminIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: "50%",
+    objectFit: "cover",
   },
 };
