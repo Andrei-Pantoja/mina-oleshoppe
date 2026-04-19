@@ -3,16 +3,14 @@ import { motion } from "framer-motion";
 import { useCart } from "../context/CartContext";
 
 export default function ProductCard({ product, onClick }) {
-  const { addToCart } = useCart();
+  const { addToCart, updateQuantity, getQuantity } = useCart();
 
-  // ✅ SAFE FALLBACKS (prevents crash)
   const name = product?.name || "No Name";
   const price = Number(product?.price) || 0;
   const description = product?.description || "";
   const facebookUrl = product?.facebookUrl || "";
   const category = product?.category || "";
 
-  // ✅ HANDLE IMAGES SAFELY
   const images =
     product?.images?.length > 0
       ? product.images
@@ -38,6 +36,9 @@ export default function ProductCard({ product, onClick }) {
     setCurrentIndex((prev) => (prev + 1) % images.length);
   };
 
+  const inCartQty = getQuantity(product?.id);
+  const inCart = inCartQty > 0;
+
   return (
     <motion.div
       onClick={onClick}
@@ -52,8 +53,7 @@ export default function ProductCard({ product, onClick }) {
           alt={name}
           style={styles.image}
           onError={(e) => {
-            e.target.src =
-              "https://via.placeholder.com/400x300?text=No+Image";
+            e.target.src = "https://via.placeholder.com/400x300?text=No+Image";
           }}
         />
 
@@ -61,20 +61,8 @@ export default function ProductCard({ product, onClick }) {
 
         {images.length > 1 && (
           <>
-            <button
-              type="button"
-              onClick={goPrev}
-              style={{ ...styles.slideBtn, left: 10 }}
-            >
-              ‹
-            </button>
-            <button
-              type="button"
-              onClick={goNext}
-              style={{ ...styles.slideBtn, right: 10 }}
-            >
-              ›
-            </button>
+            <button type="button" onClick={goPrev} style={{ ...styles.slideBtn, left: 10 }}>‹</button>
+            <button type="button" onClick={goNext} style={{ ...styles.slideBtn, right: 10 }}>›</button>
           </>
         )}
       </div>
@@ -85,10 +73,7 @@ export default function ProductCard({ product, onClick }) {
           {images.map((_, idx) => (
             <span
               key={idx}
-              onClick={(e) => {
-                e.stopPropagation();
-                setCurrentIndex(idx);
-              }}
+              onClick={(e) => { e.stopPropagation(); setCurrentIndex(idx); }}
               style={idx === currentIndex ? styles.dotActive : styles.dot}
             />
           ))}
@@ -98,26 +83,35 @@ export default function ProductCard({ product, onClick }) {
       {/* BODY */}
       <div style={styles.body}>
         <h3 style={styles.name}>{name}</h3>
-
         {description && <p style={styles.desc}>{description}</p>}
 
         {/* PRICE + BUTTONS */}
         <div style={styles.footer}>
-          <span style={styles.price}>
-            ₱{price.toLocaleString()}
-          </span>
+          <span style={styles.price}>₱{price.toLocaleString()}</span>
 
           <div style={styles.actions}>
-            {/* CART */}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                addToCart(product);
-              }}
-              style={styles.iconCartBtn}
-            >
-              🛒
-            </button>
+            {/* CART — show quantity controls if already in cart */}
+            {inCart ? (
+              <div style={styles.qtyControls} onClick={(e) => e.stopPropagation()}>
+                <button
+                  style={styles.qtyBtn}
+                  onClick={(e) => { e.stopPropagation(); updateQuantity(product.id, inCartQty - 1); }}
+                >−</button>
+                <span style={styles.qtyNum}>{inCartQty}</span>
+                <button
+                  style={styles.qtyBtn}
+                  onClick={(e) => { e.stopPropagation(); updateQuantity(product.id, inCartQty + 1); }}
+                >+</button>
+              </div>
+            ) : (
+              <button
+                onClick={(e) => { e.stopPropagation(); addToCart(product, 1); }}
+                style={styles.iconCartBtn}
+                title="Add to cart"
+              >
+                🛒
+              </button>
+            )}
 
             {/* CHAT */}
             {facebookUrl ? (
@@ -150,14 +144,12 @@ const styles = {
     flexDirection: "column",
     height: "100%",
   },
-
   imageWrap: {
     position: "relative",
     width: "100%",
     paddingTop: "75%",
     overflow: "hidden",
   },
-
   image: {
     position: "absolute",
     inset: 0,
@@ -165,7 +157,6 @@ const styles = {
     height: "100%",
     objectFit: "cover",
   },
-
   badge: {
     position: "absolute",
     top: 10,
@@ -177,7 +168,6 @@ const styles = {
     fontSize: 11,
     fontWeight: 700,
   },
-
   slideBtn: {
     position: "absolute",
     top: "50%",
@@ -190,7 +180,6 @@ const styles = {
     borderRadius: "50%",
     cursor: "pointer",
   },
-
   dots: {
     display: "flex",
     justifyContent: "center",
@@ -198,22 +187,17 @@ const styles = {
     padding: 8,
     background: "#111",
   },
-
   dot: {
-    width: 8,
-    height: 8,
+    width: 8, height: 8,
     borderRadius: "50%",
     background: "#555",
     cursor: "pointer",
   },
-
   dotActive: {
-    width: 8,
-    height: 8,
+    width: 8, height: 8,
     borderRadius: "50%",
     background: "#d4ed00",
   },
-
   body: {
     padding: "14px 16px 16px",
     display: "flex",
@@ -221,7 +205,6 @@ const styles = {
     gap: 8,
     flex: 1,
   },
-
   name: {
     fontSize: 15,
     fontWeight: 600,
@@ -229,7 +212,6 @@ const styles = {
     margin: 0,
     minHeight: 40,
   },
-
   desc: {
     fontSize: 12,
     color: "#777",
@@ -238,7 +220,6 @@ const styles = {
     WebkitBoxOrient: "vertical",
     overflow: "hidden",
   },
-
   footer: {
     display: "flex",
     alignItems: "center",
@@ -247,19 +228,16 @@ const styles = {
     paddingTop: 10,
     borderTop: "1px solid #2a2a2a",
   },
-
   price: {
     color: "#d4ed00",
     fontWeight: 800,
     fontSize: 18,
   },
-
   actions: {
     display: "flex",
     gap: 8,
     alignItems: "center",
   },
-
   iconCartBtn: {
     background: "#2a2a2a",
     border: "1px solid #333",
@@ -269,7 +247,32 @@ const styles = {
     cursor: "pointer",
     fontSize: 16,
   },
-
+  qtyControls: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    background: "#2a2a2a",
+    border: "1px solid #d4ed00",
+    borderRadius: 8,
+    padding: "4px 8px",
+  },
+  qtyBtn: {
+    background: "none",
+    border: "none",
+    color: "#d4ed00",
+    fontSize: 16,
+    fontWeight: 700,
+    cursor: "pointer",
+    padding: "0 4px",
+    lineHeight: 1,
+  },
+  qtyNum: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: 600,
+    minWidth: 16,
+    textAlign: "center",
+  },
   cartBtn: {
     background: "#d4ed00",
     color: "#111",
@@ -279,7 +282,6 @@ const styles = {
     fontSize: 12,
     fontWeight: 700,
   },
-
   noLink: {
     fontSize: 12,
     color: "#555",
