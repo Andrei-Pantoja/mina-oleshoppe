@@ -1,5 +1,3 @@
-// SAME IMPORTS (unchanged)
-
 import { useEffect, useState } from "react";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../firebase/config";
@@ -37,8 +35,9 @@ export default function StorePage() {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [sortOption, setSortOption] = useState("Newest");
-
   const [previewImage, setPreviewImage] = useState(null);
+  const [inquiryPopup, setInquiryPopup] = useState(null); // { message, sellerUrl }
+  const [copied, setCopied] = useState(false);
 
   const { cart } = useCart();
 
@@ -57,7 +56,6 @@ export default function StorePage() {
         setLoading(false);
       }
     };
-
     fetchProducts();
   }, []);
 
@@ -65,21 +63,16 @@ export default function StorePage() {
     .filter((p) => {
       if (!p) return false;
       const matchCat = activeCategory === "All" || p.category === activeCategory;
-      const matchSearch =
-        (p.name || "").toLowerCase().includes(search.toLowerCase());
+      const matchSearch = (p.name || "").toLowerCase().includes(search.toLowerCase());
       return matchCat && matchSearch;
     })
     .sort((a, b) => {
-      if (sortOption === "Price Low → High") {
-        return Number(a.price || 0) - Number(b.price || 0);
-      }
-      if (sortOption === "Price High → Low") {
-        return Number(b.price || 0) - Number(a.price || 0);
-      }
+      if (sortOption === "Price Low → High") return Number(a.price || 0) - Number(b.price || 0);
+      if (sortOption === "Price High → Low") return Number(b.price || 0) - Number(a.price || 0);
       return 0;
     });
 
-  // Build messenger checkout message and redirect
+  // Show confirmation popup with the inquiry message
   const handleCheckout = () => {
     if (!cart || cart.length === 0) return;
 
@@ -92,14 +85,23 @@ export default function StorePage() {
       0
     );
 
-    const message = `Hello! I want to inquire:\n${lines.join("\n")}\nTotal: ₱${total.toLocaleString()}`;
+    const message = `Hello! I want to inquire if this is available:\n\n${lines.join("\n")}\n\nTotal: ₱${total.toLocaleString()}`;
     const sellerUrl = getMostCommonSellerUrl(cart);
-    const encoded = encodeURIComponent(message);
-    const messengerUrl = `${sellerUrl}?text=${encoded}`;
-    window.open(messengerUrl, "_blank");
+    setInquiryPopup({ message, sellerUrl });
+    setCopied(false);
   };
 
-  // ✅ RESPONSIVE STYLES
+  const handleCopy = () => {
+    navigator.clipboard.writeText(inquiryPopup.message).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    });
+  };
+
+  const handleOpenMessenger = () => {
+    window.open(inquiryPopup.sellerUrl, "_blank");
+  };
+
   const responsiveStyles = {
     sidebar: {
       width: isMobile ? "100%" : 200,
@@ -107,12 +109,9 @@ export default function StorePage() {
       padding: 16,
       borderRadius: 12,
     },
-
     grid: {
       display: "grid",
-      gridTemplateColumns: isMobile
-        ? "1fr"
-        : "repeat(auto-fill, minmax(240px, 1fr))",
+      gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(240px, 1fr))",
       gap: 20,
     },
   };
@@ -121,9 +120,7 @@ export default function StorePage() {
     <div style={styles.page}>
       <div style={styles.hero}>
         <h1 style={styles.heroTitle}>🎥 Action Camera Accessories</h1>
-        <p style={styles.heroSub}>
-          GoPro · Insta360 · Motorcycle Mounts & More
-        </p>
+        <p style={styles.heroSub}>GoPro · Insta360 · Motorcycle Mounts & More</p>
       </div>
 
       <div style={styles.topBar}>
@@ -134,7 +131,6 @@ export default function StorePage() {
           onChange={(e) => setSearch(e.target.value)}
           style={styles.search}
         />
-
         <select
           value={sortOption}
           onChange={(e) => setSortOption(e.target.value)}
@@ -147,7 +143,6 @@ export default function StorePage() {
       </div>
 
       <div style={{ ...styles.contentWrapper, flexWrap: "wrap" }}>
-        {/* ✅ SIDEBAR RESPONSIVE */}
         <div style={responsiveStyles.sidebar}>
           <h3 style={styles.sidebarTitle}>Categories</h3>
           {CATEGORIES.map((cat) => (
@@ -174,7 +169,6 @@ export default function StorePage() {
           ) : filtered.length === 0 ? (
             <div style={styles.empty}>No products found.</div>
           ) : (
-            // ✅ GRID RESPONSIVE
             <div style={responsiveStyles.grid}>
               {filtered.map((product) => (
                 <motion.div
@@ -196,7 +190,6 @@ export default function StorePage() {
           <div style={styles.footerSection}>
             <h3 style={styles.footerTitle}>📍 Our Store</h3>
             <p style={styles.footerText}>
-              {/* Clickable Facebook page */}
               Facebook Page:{" "}
               <a
                 href="https://www.facebook.com/MinaOnlineShoppee"
@@ -210,18 +203,13 @@ export default function StorePage() {
               Located in 999 Shopping Mall / Pasilio 2G-09 <br />
               BLDG 2 BINONDO NEAR C.M RECTO SIDE ENTRANCE
             </p>
-
             <img
               src={mapImage}
               style={styles.mapImage}
               alt="map"
               onClick={() => setPreviewImage(mapImage)}
-              onMouseOver={(e) =>
-                (e.currentTarget.style.boxShadow = "0 0 12px #d4ed00")
-              }
-              onMouseOut={(e) =>
-                (e.currentTarget.style.boxShadow = "0 0 0 transparent")
-              }
+              onMouseOver={(e) => (e.currentTarget.style.boxShadow = "0 0 12px #d4ed00")}
+              onMouseOut={(e) => (e.currentTarget.style.boxShadow = "0 0 0 transparent")}
             />
           </div>
 
@@ -234,12 +222,8 @@ export default function StorePage() {
                   src={img}
                   style={styles.storeImg}
                   onClick={() => setPreviewImage(img)}
-                  onMouseOver={(e) =>
-                    (e.currentTarget.style.boxShadow = "0 0 10px #d4ed00")
-                  }
-                  onMouseOut={(e) =>
-                    (e.currentTarget.style.boxShadow = "0 0 0 transparent")
-                  }
+                  onMouseOver={(e) => (e.currentTarget.style.boxShadow = "0 0 10px #d4ed00")}
+                  onMouseOut={(e) => (e.currentTarget.style.boxShadow = "0 0 0 transparent")}
                   alt=""
                 />
               ))}
@@ -256,16 +240,14 @@ export default function StorePage() {
             </p>
           </div>
         </div>
-
         <p style={styles.footerBottom}>© 2014 Mina OleShoppe</p>
       </footer>
 
-      {/* PREVIEW MODAL */}
+      {/* IMAGE PREVIEW MODAL */}
       {previewImage && (
-        <div style={styles.previewOverlay} onClick={() => setPreviewImage(null)}>
+        <div style={styles.overlay} onClick={() => setPreviewImage(null)}>
           <div style={styles.previewBox} onClick={(e) => e.stopPropagation()}>
             <img src={previewImage} style={styles.previewImage} alt="" />
-
             {previewImage === mapImage && (
               <a
                 href="https://www.google.com/maps/place/Puregold+-+C.M.+Recto+(999+Shopping+Mall)/@14.6062437,120.9733403,221m/data=!3m1!1e3!4m6!3m5!1s0x3397ca0ede72c809:0xed3a7ecddf8971ea!8m2!3d14.6063662!4d120.9737464!16s%2Fg%2F11bc6z98w7?entry=ttu&g_ep=EgoyMDI2MDQxMy4wIKXMDSoASAFQAw%3D%3D"
@@ -276,13 +258,41 @@ export default function StorePage() {
                 📍 Check location on Google Maps
               </a>
             )}
-
-            <button
-              style={styles.previewClose}
-              onClick={() => setPreviewImage(null)}
-            >
+            <button style={styles.previewClose} onClick={() => setPreviewImage(null)}>
               ✕ Close
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* INQUIRY CONFIRMATION POPUP */}
+      {inquiryPopup && (
+        <div style={styles.overlay} onClick={() => setInquiryPopup(null)}>
+          <div style={styles.inquiryBox} onClick={(e) => e.stopPropagation()}>
+            <h3 style={styles.inquiryTitle}>📋 Confirm Your Inquiry</h3>
+            <p style={styles.inquirySubtitle}>
+              Are you sure you want to inquire about these items? Copy the message then paste it in Messenger.
+            </p>
+
+            {/* Message preview */}
+            <div style={styles.inquiryMessage}>
+              {inquiryPopup.message.split("\n").map((line, i) => (
+                <span key={i}>{line}<br /></span>
+              ))}
+            </div>
+
+            {/* Action buttons */}
+            <div style={styles.inquiryBtns}>
+              <button onClick={handleCopy} style={styles.copyBtn}>
+                {copied ? "✅ Copied!" : "📋 Copy Message"}
+              </button>
+              <button onClick={handleOpenMessenger} style={styles.messengerBtn}>
+                💬 Open Messenger
+              </button>
+              <button onClick={() => setInquiryPopup(null)} style={styles.cancelInquiryBtn}>
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -294,7 +304,6 @@ export default function StorePage() {
         />
       )}
 
-      {/* Pass handleCheckout to CartDrawer */}
       <CartDrawer
         open={cartOpen}
         onClose={() => setCartOpen(false)}
@@ -303,9 +312,7 @@ export default function StorePage() {
 
       <button onClick={() => setCartOpen(true)} style={styles.floatingCart}>
         🛒
-        {cart.length > 0 && (
-          <span style={styles.badge}>{cart.length}</span>
-        )}
+        {cart.length > 0 && <span style={styles.badge}>{cart.length}</span>}
       </button>
     </div>
   );
@@ -322,6 +329,7 @@ const styles = {
     fontWeight: "bold",
     textDecoration: "none",
     color: "#111",
+    display: "inline-block",
   },
 
   page: { background: "#0f0f0f", color: "#fff" },
@@ -334,96 +342,121 @@ const styles = {
   sort: { padding: 10, borderRadius: 8, background: "#1a1a1a", color: "#fff", border: "none" },
 
   contentWrapper: { display: "flex", gap: 20, maxWidth: 1200, margin: "auto", padding: 20 },
-  sidebar: { width: 200, background: "#1c1c1c", padding: 16, borderRadius: 12 },
-  sideBtn: { width: "100%", padding: 10, color: "#aaa", background: "transparent", border: "none", cursor: "pointer" },
+  sidebarTitle: { color: "#fff", marginBottom: 10, fontSize: 14 },
+  sideBtn: { width: "100%", padding: 10, color: "#aaa", background: "transparent", border: "none", cursor: "pointer", textAlign: "left", borderRadius: 6 },
   sideBtnActive: { background: "#d4ed00", color: "#111" },
 
   mainContent: { flex: 1 },
-  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 20 },
 
   footer: { background: "#111", padding: 40, marginTop: 40 },
   footerContent: { display: "flex", flexWrap: "wrap", gap: 40, maxWidth: 1200, margin: "auto" },
   footerSection: { flex: "1 1 300px" },
-
   footerTitle: { color: "#d4ed00" },
-  footerText: { color: "#aaa" },
-
-  fbPageLink: {
-    color: "#d4ed00",
-    textDecoration: "underline",
-    cursor: "pointer",
-    fontWeight: "bold",
-  },
+  footerText: { color: "#aaa", lineHeight: 1.8 },
+  fbPageLink: { color: "#d4ed00", textDecoration: "underline", cursor: "pointer", fontWeight: "bold" },
 
   storeImages: { display: "flex", gap: 10 },
   storeImg: { width: 80, height: 80, cursor: "pointer", borderRadius: 6 },
-
-  mapImage: {
-    width: "100%",
-    height: 200,
-    objectFit: "cover",
-    cursor: "pointer",
-    borderRadius: 10,
-  },
-
+  mapImage: { width: "100%", height: 200, objectFit: "cover", cursor: "pointer", borderRadius: 10 },
   footerBottom: { textAlign: "center", marginTop: 20, color: "#555" },
 
   floatingCart: {
-    position: "fixed",
-    bottom: 20,
-    right: 20,
-    width: 60,
-    height: 60,
-    borderRadius: "50%",
-    background: "#d4ed00",
-    border: "none",
+    position: "fixed", bottom: 20, right: 20,
+    width: 60, height: 60, borderRadius: "50%",
+    background: "#d4ed00", border: "none", cursor: "pointer",
+    fontSize: 22,
   },
-
   badge: {
-    position: "absolute",
-    top: -6,
-    right: -6,
-    background: "red",
-    color: "#fff",
-    borderRadius: "50%",
-    padding: "2px 6px",
+    position: "absolute", top: -6, right: -6,
+    background: "red", color: "#fff",
+    borderRadius: "50%", padding: "2px 6px", fontSize: 11,
   },
 
-  previewOverlay: {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    width: "100%",
-    height: "100%",
+  // Shared overlay
+  overlay: {
+    position: "fixed", top: 0, left: 0,
+    width: "100%", height: "100%",
     background: "rgba(0,0,0,0.85)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
+    display: "flex", justifyContent: "center", alignItems: "center",
     zIndex: 2000,
   },
 
+  // Image preview
   previewBox: {
-    maxWidth: "70%",
-    maxHeight: "80%",
+    maxWidth: "70%", maxHeight: "80%",
+    display: "flex", flexDirection: "column", alignItems: "center",
+  },
+  previewImage: { width: "100%", maxHeight: "75vh", objectFit: "contain", borderRadius: 12 },
+  previewClose: {
+    marginTop: 15, background: "#d4ed00", border: "none",
+    borderRadius: 999, padding: "10px 20px", cursor: "pointer", fontWeight: "bold",
+  },
+
+  // Inquiry popup
+  inquiryBox: {
+    background: "#1a1a1a",
+    border: "1px solid #2a2a2a",
+    borderRadius: 16,
+    padding: 28,
+    width: "90%",
+    maxWidth: 460,
     display: "flex",
     flexDirection: "column",
-    alignItems: "center",
+    gap: 16,
   },
-
-  previewImage: {
-    width: "100%",
-    maxHeight: "75vh",
-    objectFit: "contain",
-    borderRadius: 12,
+  inquiryTitle: {
+    margin: 0,
+    color: "#d4ed00",
+    fontSize: 18,
+    fontWeight: 700,
   },
-
-  previewClose: {
-    marginTop: 15,
+  inquirySubtitle: {
+    margin: 0,
+    color: "#aaa",
+    fontSize: 13,
+    lineHeight: 1.6,
+  },
+  inquiryMessage: {
+    background: "#111",
+    border: "1px solid #333",
+    borderRadius: 10,
+    padding: "14px 16px",
+    color: "#fff",
+    fontSize: 14,
+    lineHeight: 1.8,
+  },
+  inquiryBtns: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+  },
+  copyBtn: {
+    background: "#2a2a2a",
+    border: "1px solid #444",
+    color: "#fff",
+    borderRadius: 10,
+    padding: "12px 0",
+    fontWeight: 600,
+    fontSize: 14,
+    cursor: "pointer",
+  },
+  messengerBtn: {
     background: "#d4ed00",
     border: "none",
-    borderRadius: 999,
-    padding: "10px 20px",
+    color: "#111",
+    borderRadius: 10,
+    padding: "12px 0",
+    fontWeight: 700,
+    fontSize: 14,
     cursor: "pointer",
-    fontWeight: "bold",
+  },
+  cancelInquiryBtn: {
+    background: "none",
+    border: "1px solid #333",
+    color: "#666",
+    borderRadius: 10,
+    padding: "10px 0",
+    fontSize: 13,
+    cursor: "pointer",
   },
 };
