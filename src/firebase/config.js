@@ -3,8 +3,6 @@ import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { getStorage } from "firebase/storage";
 
-// 🔧 REPLACE THESE WITH YOUR FIREBASE PROJECT CREDENTIALS
-// Go to: Firebase Console → Project Settings → Your Apps → SDK setup
 const firebaseConfig = {
   apiKey: "AIzaSyD4Go_4BHnTJvayufHXMQYMGv_kvmfZE1g",
   authDomain: "react-projects-46390.firebaseapp.com",

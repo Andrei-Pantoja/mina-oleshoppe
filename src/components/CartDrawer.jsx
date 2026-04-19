@@ -1,10 +1,10 @@
 import { useCart } from "../context/CartContext";
 
-export default function CartDrawer({ open, onClose }) {
+export default function CartDrawer({ open, onClose, onCheckout }) {
   const { cart, removeFromCart } = useCart();
 
   const total = cart.reduce(
-    (sum, item) => sum + Number(item.price || 0),
+    (sum, item) => sum + Number(item.price || 0) * (item.quantity || 1),
     0
   );
 
@@ -61,14 +61,15 @@ export default function CartDrawer({ open, onClose }) {
           <div style={styles.footer}>
             <h4>Total: ₱{total.toLocaleString()}</h4>
 
-            <a
-              href={cart[0]?.facebookUrl || "#"}
-              target="_blank"
-              rel="noreferrer"
+            <button
+              onClick={() => {
+                onClose();
+                onCheckout();
+              }}
               style={styles.checkoutBtn}
             >
-              Checkout via Facebook
-            </a>
+              💬 Checkout via Messenger
+            </button>
           </div>
         )}
       </div>
@@ -151,13 +152,17 @@ const styles = {
   },
   checkoutBtn: {
     display: "block",
+    width: "100%",
     marginTop: 10,
     background: "#d4ed00",
     color: "#111",
     textAlign: "center",
     padding: 12,
     borderRadius: 10,
-    textDecoration: "none",
     fontWeight: 700,
+    fontSize: 15,
+    border: "none",
+    cursor: "pointer",
+    boxSizing: "border-box",
   },
 };

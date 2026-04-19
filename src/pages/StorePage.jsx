@@ -14,7 +14,6 @@ import mapImage from "../assets/store3.png";
 
 const CATEGORIES = ["All", "GoPro", "Insta360", "Mounts & Clamps", "Accessories", "Other"];
 
-// Picks the most common seller messenger link from cart items
 function getMostCommonSellerUrl(cartItems) {
   if (!cartItems || cartItems.length === 0) return "https://m.me/Sithis02";
   const counts = {};
@@ -372,7 +371,6 @@ const styles = {
     borderRadius: "50%", padding: "2px 6px", fontSize: 11,
   },
 
-  // Shared overlay
   overlay: {
     position: "fixed", top: 0, left: 0,
     width: "100%", height: "100%",
@@ -381,7 +379,6 @@ const styles = {
     zIndex: 2000,
   },
 
-  // Image preview
   previewBox: {
     maxWidth: "70%", maxHeight: "80%",
     display: "flex", flexDirection: "column", alignItems: "center",
@@ -392,7 +389,6 @@ const styles = {
     borderRadius: 999, padding: "10px 20px", cursor: "pointer", fontWeight: "bold",
   },
 
-  // Inquiry popup
   inquiryBox: {
     background: "#1a1a1a",
     border: "1px solid #2a2a2a",
