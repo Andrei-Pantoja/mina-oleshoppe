@@ -2,6 +2,11 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { useCart } from "../context/CartContext";
 
+const capitalizeFirst = (str) => {
+  if (!str) return str;
+  return str.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+};
+
 function Stars({ rating }) {
   const r = Math.max(0, Math.min(5, Number(rating || 0)));
   if (!r) return null;
@@ -17,7 +22,7 @@ function Stars({ rating }) {
 export default function ProductCard({ product, onClick }) {
   const { addToCart, updateQuantity, getQuantity } = useCart();
 
-  const name = product?.name || "No Name";
+  const name = capitalizeFirst(product?.name || "No Name");
   const price = Number(product?.price) || 0;
   const description = product?.description || "";
   const facebookUrl = product?.facebookUrl || "";

@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { useCart } from "../context/CartContext";
 
+const capitalizeFirst = (str) => {
+  if (!str) return str;
+  return str.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+};
+
 const getYouTubeId = (url) => {
   if (!url) return null;
   const m = url.match(/(?:youtu\.be\/|v=|embed\/)([A-Za-z0-9_-]{11})/);
@@ -44,7 +49,7 @@ export default function ProductModal({ product, onClose }) {
 
   /* ── Build single-item inquiry message ────────────── */
   const buildInquiryMessage = () =>
-    `Hello! I want to inquire if this is available:\n\n• ${product.name} x1 - ₱${Number(product.price).toLocaleString()}\n\nTotal: ₱${Number(product.price).toLocaleString()}`;
+    `Hello! I want to inquire if this is available:\n\n• ${capitalizeFirst(product.name)} x1 - ₱${Number(product.price).toLocaleString()}\n\nTotal: ₱${Number(product.price).toLocaleString()}`;
 
   const handleInquire = () => {
     setShowInquiry(true);
@@ -129,7 +134,7 @@ export default function ProductModal({ product, onClose }) {
           {/* Info */}
           <div style={styles.info}>
             <div>
-              <h2 style={styles.name}>{product.name}</h2>
+              <h2 style={styles.name}>{capitalizeFirst(product.name)}</h2>
               {showMeta && (
                 <span style={styles.metaBadge}>
                   {product.category || "—"}
