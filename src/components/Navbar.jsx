@@ -12,7 +12,22 @@ export default function Navbar() {
   const [showLogin, setShowLogin] = useState(false);
   const navigate = useNavigate();
 
+  const confirmUnsaved = async () => {
+    const u = window.__minaAdminUnsaved;
+    if (!u?.dirty) return true;
+    const ok = window.confirm(u.message || "You have unsaved changes. Save before leaving?");
+    if (!ok) return false;
+    try {
+      const saved = await u.save?.();
+      return !!saved;
+    } catch {
+      return false;
+    }
+  };
+
   const handleLogout = async () => {
+    const ok = await confirmUnsaved();
+    if (!ok) return;
     await logout();
     navigate("/");
   };
@@ -33,7 +48,14 @@ export default function Navbar() {
         gap: 12,
         boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
       }}>
-        <Link to="/" style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none", minWidth: 0 }}>
+        <Link
+          to="/"
+          onClick={async (e) => {
+            const ok = await confirmUnsaved();
+            if (!ok) e.preventDefault();
+          }}
+          style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none", minWidth: 0 }}
+        >
           <img src={logo} alt="Mina OleShoppe" style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }} />
           <span style={{ color: "#d4ed00", fontWeight: 700, fontSize: 16, letterSpacing: 0.5 }}>
             Mina OleShoppe
@@ -59,7 +81,14 @@ export default function Navbar() {
 
           {user ? (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-              <Link to="/admin" style={{ color: "#d4ed00", fontWeight: 600, fontSize: 12, textDecoration: "none" }}>
+              <Link
+                to="/admin"
+                onClick={async (e) => {
+                  const ok = await confirmUnsaved();
+                  if (!ok) e.preventDefault();
+                }}
+                style={{ color: "#d4ed00", fontWeight: 600, fontSize: 12, textDecoration: "none" }}
+              >
                 Dashboard
               </Link>
               <button

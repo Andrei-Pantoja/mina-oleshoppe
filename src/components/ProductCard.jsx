@@ -2,6 +2,18 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { useCart } from "../context/CartContext";
 
+function Stars({ rating }) {
+  const r = Math.max(0, Math.min(5, Number(rating || 0)));
+  if (!r) return null;
+  const full = Math.round(r);
+  return (
+    <span style={styles.stars} aria-label={`Rating ${full} out of 5`}>
+      {"★★★★★".slice(0, full)}
+      <span style={styles.starsEmpty}>{"★★★★★".slice(0, 5 - full)}</span>
+    </span>
+  );
+}
+
 export default function ProductCard({ product, onClick }) {
   const { addToCart, updateQuantity, getQuantity } = useCart();
 
@@ -11,6 +23,7 @@ export default function ProductCard({ product, onClick }) {
   const facebookUrl = product?.facebookUrl || "";
   const category = product?.category || "";
   const brand = product?.brand || "";
+  const rating = product?.rating || 0;
 
   const images = product?.images?.length > 0
     ? product.images
@@ -45,7 +58,12 @@ export default function ProductCard({ product, onClick }) {
         <img src={currentImage} alt={name} style={styles.image}
           onError={(e) => { e.target.src = "https://via.placeholder.com/400x300?text=No+Image"; }} />
 
-        {category && <span style={styles.badge}>{category}</span>}
+        {(category || (brand && brand !== "Other")) && (
+          <span style={styles.badge}>
+            {category || "—"}
+            {brand && brand !== "Other" ? ` · ${brand}` : ""}
+          </span>
+        )}
 
         {images.length > 1 && (
           <>
@@ -70,7 +88,7 @@ export default function ProductCard({ product, onClick }) {
       {/* Body */}
       <div style={styles.body}>
         <h3 style={styles.name}>{name}</h3>
-        {brand && <span style={styles.brandTag}>{brand}</span>}
+        <Stars rating={rating} />
         {description && <p style={styles.desc}>{description}</p>}
 
         <div style={styles.footer}>
@@ -131,11 +149,8 @@ const styles = {
   dotActive: { width: 8, height: 8, borderRadius: "50%", background: "var(--accent)", cursor: "pointer" },
   body: { padding: "14px 16px 16px", display: "flex", flexDirection: "column", gap: 6, flex: 1 },
   name: { fontSize: 15, fontWeight: 600, color: "var(--text)", margin: 0, minHeight: 40 },
-  brandTag: {
-    display: "inline-block", background: "var(--bg-input)",
-    border: "1px solid var(--border-light)", borderRadius: 4,
-    padding: "2px 8px", fontSize: 11, color: "var(--text-muted)",
-  },
+  stars: { fontSize: 12, color: "var(--accent)", letterSpacing: 1, lineHeight: 1 },
+  starsEmpty: { color: "var(--text-dim)" },
   desc: {
     fontSize: 12, color: "var(--text-muted)",
     display: "-webkit-box", WebkitLineClamp: 2,

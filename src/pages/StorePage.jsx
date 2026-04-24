@@ -6,22 +6,16 @@ import ProductModal from "../components/ProductModal";
 import { motion } from "framer-motion";
 import CartDrawer from "../components/CartDrawer";
 import { useCart } from "../context/CartContext";
+import { DEFAULT_BRANDS_BY_CATEGORY, DEFAULT_CATEGORIES, getShopOptions } from "../utils/shopOptions";
 
 import store1 from "../assets/store1.png";
 import store2 from "../assets/store2.png";
 import store3 from "../assets/store3.png";
 import mapImage from "../assets/store3.png";
 
-const CATEGORIES = ["All", "GoPro", "Insta360", "Mounts & Clamps", "Accessories", "Bundle", "Other"];
+const CATEGORIES = ["All", ...DEFAULT_CATEGORIES];
 
-const BRANDS_BY_CATEGORY = {
-  GoPro: ["Hero 12", "Hero 11", "Hero 10", "Hero 9", "Hero 8", "Max", "Other"],
-  Insta360: ["X4", "X3", "X2", "ONE RS", "ONE X2", "GO 3", "Other"],
-  "Mounts & Clamps": ["RAM Mounts", "GoPro Official", "Peak Design", "Ulanzi", "Generic", "Other"],
-  Accessories: ["Batteries", "Chargers", "Cases", "Filters", "Memory Cards", "Other"],
-  Bundle: ["GoPro Bundle", "Insta360 Bundle", "Mixed Bundle", "Other"],
-  Other: ["Other"],
-};
+const BRANDS_BY_CATEGORY = DEFAULT_BRANDS_BY_CATEGORY;
 
 function getMostCommonSellerUrl(cartItems) {
   if (!cartItems?.length) return "https://m.me/Sithis02";
@@ -39,7 +33,8 @@ export default function StorePage() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState("All");
-  const [activeBrand, setActiveBrand] = useState("All");
+  const [activeBrands, setActiveBrands] = useState([]); // multi-select; empty => All
+  const [shopOptions, setShopOptions] = useState({ categories: DEFAULT_CATEGORIES, brandsByCategory: BRANDS_BY_CATEGORY });
   const [search, setSearch] = useState("");
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [cartOpen, setCartOpen] = useState(false);
@@ -47,6 +42,7 @@ export default function StorePage() {
   const [previewImage, setPreviewImage] = useState(null);
   const [inquiryPopup, setInquiryPopup] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [viewWriteError, setViewWriteError] = useState(false);
 
   const { cart } = useCart();
 
@@ -54,7 +50,7 @@ export default function StorePage() {
     const fetchProducts = async () => {
       try {
         const snap = await getDocs(collection(db, "products"));
-        setProducts(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        setProducts(snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((p) => !p?.isConfig));
       } catch (err) {
         console.error(err);
       } finally {
@@ -64,31 +60,86 @@ export default function StorePage() {
     fetchProducts();
   }, []);
 
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const opts = await getShopOptions();
+        if (!mounted) return;
+        setShopOptions(opts);
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
   /* ── Track product view ──────────────────────────────── */
   const handleOpenProduct = async (product) => {
     setSelectedProduct(product);
+    // Update local UI immediately (admin dashboard uses Firestore).
+    setProducts((cur) =>
+      cur.map((p) => (p.id === product.id ? { ...p, views: (p.views || 0) + 1 } : p))
+    );
     try {
       await updateDoc(doc(db, "products", product.id), { views: increment(1) });
-    } catch (_) {}
+    } catch (e) {
+      console.error(e);
+      // Only show the warning when it's really a permission issue.
+      if (String(e?.code || "").toLowerCase().includes("permission")) {
+        setViewWriteError(true);
+      }
+    }
   };
 
   /* ── Category change resets brand ─────────────────── */
   const handleCategoryChange = (cat) => {
     setActiveCategory(cat);
-    setActiveBrand("All");
+    setActiveBrands([]);
+  };
+
+  const toggleCategory = (cat) => {
+    if (cat === "All") {
+      setActiveCategory("All");
+      setActiveBrands([]);
+      return;
+    }
+    if (activeCategory === cat) {
+      setActiveCategory("All");
+      setActiveBrands([]);
+      return;
+    }
+    handleCategoryChange(cat);
+  };
+
+  const toggleBrand = (brand) => {
+    if (brand === "All") {
+      setActiveBrands([]);
+      return;
+    }
+    setActiveBrands((cur) => {
+      const has = cur.includes(brand);
+      if (has) return cur.filter((b) => b !== brand);
+      return [...cur, brand];
+    });
   };
 
   /* ── Available brands for active category ─────────── */
   const availableBrands = activeCategory !== "All"
-    ? ["All", ...(BRANDS_BY_CATEGORY[activeCategory] || [])]
+    ? [
+      "All",
+      ...(((shopOptions.brandsByCategory || {})[activeCategory] || BRANDS_BY_CATEGORY[activeCategory] || [])),
+    ]
     : [];
+
+  const categoriesForSidebar = ["All", ...((shopOptions.categories || DEFAULT_CATEGORIES).filter(Boolean))];
 
   /* ── Filtered + sorted products ─────────────────────── */
   const filtered = products
     .filter((p) => {
       if (!p) return false;
       const matchCat = activeCategory === "All" || p.category === activeCategory;
-      const matchBrand = activeBrand === "All" || p.brand === activeBrand;
+      const matchBrand = activeBrands.length === 0 || activeBrands.includes(p.brand);
       const matchSearch = (p.name || "").toLowerCase().includes(search.toLowerCase());
       return matchCat && matchBrand && matchSearch;
     })
@@ -120,6 +171,11 @@ export default function StorePage() {
   /* ─── RENDER ─────────────────────────────────────────── */
   return (
     <div style={styles.page}>
+      {viewWriteError && (
+        <div style={styles.viewWarn}>
+          Views are not updating in Admin because Firestore rules are blocking public view increments.
+        </div>
+      )}
       {/* Hero */}
       <div style={styles.hero}>
         <h1 style={styles.heroTitle}>🎥 Action Camera Accessories</h1>
@@ -150,36 +206,51 @@ export default function StorePage() {
         {/* Sidebar */}
         <div style={{ ...styles.sidebar, width: isMobile ? "100%" : 200 }}>
           <h3 style={styles.sidebarTitle}>Categories</h3>
-          {CATEGORIES.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => handleCategoryChange(cat)}
-              style={{
-                ...styles.sideBtn,
-                ...(activeCategory === cat ? styles.sideBtnActive : {}),
-              }}
-            >
-              {cat}
-            </button>
-          ))}
+          {categoriesForSidebar.map((cat) => {
+            const checked = activeCategory === cat || (cat === "All" && activeCategory === "All");
+            return (
+              <label
+                key={cat}
+                style={{
+                  ...styles.checkRow,
+                  ...(checked ? styles.checkRowActive : {}),
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggleCategory(cat)}
+                  style={styles.checkbox}
+                />
+                <span style={styles.checkLabel}>{cat}</span>
+              </label>
+            );
+          })}
 
           {/* Brand sub-filter */}
           {availableBrands.length > 1 && (
             <>
               <h3 style={{ ...styles.sidebarTitle, marginTop: 20 }}>Brand / Unit</h3>
-              {availableBrands.map((brand) => (
-                <button
-                  key={brand}
-                  onClick={() => setActiveBrand(brand)}
-                  style={{
-                    ...styles.sideBtn,
-                    ...(activeBrand === brand ? styles.sideBtnActive : {}),
-                    fontSize: 12,
-                  }}
-                >
-                  {brand}
-                </button>
-              ))}
+              {availableBrands.map((brand) => {
+                const checked = brand === "All" ? activeBrands.length === 0 : activeBrands.includes(brand);
+                return (
+                  <label
+                    key={brand}
+                    style={{
+                      ...styles.checkRow,
+                      ...(checked ? styles.checkRowActive : {}),
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleBrand(brand)}
+                      style={styles.checkbox}
+                    />
+                    <span style={{ ...styles.checkLabel, fontSize: 12 }}>{brand}</span>
+                  </label>
+                );
+              })}
             </>
           )}
         </div>
@@ -188,7 +259,7 @@ export default function StorePage() {
         <div style={styles.mainContent}>
           <p style={{ marginBottom: 10, color: "var(--text-muted)" }}>
             {filtered.length} products found
-            {activeBrand !== "All" && ` · ${activeBrand}`}
+            {activeBrands.length > 0 && ` · ${activeBrands.join(", ")}`}
           </p>
 
           {loading ? (
@@ -327,6 +398,19 @@ export default function StorePage() {
 
 const styles = {
   page: { background: "var(--bg)", color: "var(--text)", minHeight: "100vh" },
+  viewWarn: {
+    position: "sticky",
+    top: 62,
+    zIndex: 1200,
+    margin: "10px auto 0",
+    maxWidth: 1200,
+    background: "rgba(255,0,0,0.08)",
+    border: "1px solid rgba(255,0,0,0.25)",
+    color: "var(--text)",
+    padding: "10px 14px",
+    borderRadius: 10,
+    fontSize: 12,
+  },
   hero: { padding: 40, textAlign: "center", borderBottom: "2px solid var(--accent)" },
   heroTitle: { color: "var(--accent)", fontSize: 28, fontWeight: 800 },
   heroSub: { color: "var(--text-muted)", marginTop: 8 },
@@ -344,6 +428,24 @@ const styles = {
   contentWrapper: { display: "flex", gap: 20, maxWidth: 1200, margin: "auto", padding: 20 },
   sidebar: { background: "var(--bg-card)", padding: 16, borderRadius: 12, border: "1px solid var(--border)" },
   sidebarTitle: { color: "var(--text)", marginBottom: 10, fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 },
+  checkRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    width: "100%",
+    padding: "8px 10px",
+    borderRadius: 8,
+    cursor: "pointer",
+    color: "var(--text-muted)",
+    userSelect: "none",
+  },
+  checkRowActive: {
+    background: "var(--accent)",
+    color: "var(--accent-text)",
+    fontWeight: 700,
+  },
+  checkbox: { accentColor: "var(--accent)", margin: 0 },
+  checkLabel: { lineHeight: 1.2 },
   sideBtn: {
     width: "100%", padding: 10, color: "var(--text-muted)",
     background: "transparent", border: "none", cursor: "pointer",

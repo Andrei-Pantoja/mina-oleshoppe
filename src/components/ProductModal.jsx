@@ -7,6 +7,18 @@ const getYouTubeId = (url) => {
   return m ? m[1] : null;
 };
 
+function Stars({ rating }) {
+  const r = Math.max(0, Math.min(5, Number(rating || 0)));
+  if (!r) return null;
+  const full = Math.round(r);
+  return (
+    <span style={styles.stars} aria-label={`Rating ${full} out of 5`}>
+      {"★★★★★".slice(0, full)}
+      <span style={styles.starsEmpty}>{"★★★★★".slice(0, 5 - full)}</span>
+    </span>
+  );
+}
+
 export default function ProductModal({ product, onClose }) {
   const { addToCart, updateQuantity, getQuantity } = useCart();
 
@@ -27,6 +39,8 @@ export default function ProductModal({ product, onClose }) {
   const inCartQty = getQuantity(product?.id);
   const inCart = inCartQty > 0;
   const youtubeId = getYouTubeId(product.youtubeUrl);
+  const showBrand = product?.brand && product.brand !== "Other";
+  const showMeta = product?.category || showBrand;
 
   /* ── Build single-item inquiry message ────────────── */
   const buildInquiryMessage = () =>
@@ -116,9 +130,13 @@ export default function ProductModal({ product, onClose }) {
           <div style={styles.info}>
             <div>
               <h2 style={styles.name}>{product.name}</h2>
-              {product.brand && (
-                <span style={styles.brandBadge}>{product.brand}</span>
+              {showMeta && (
+                <span style={styles.metaBadge}>
+                  {product.category || "—"}
+                  {showBrand ? ` · ${product.brand}` : ""}
+                </span>
               )}
+              <Stars rating={product?.rating || 0} />
               <p style={styles.price}>₱{Number(product.price).toLocaleString()}</p>
               {product.description && (
                 <p style={styles.desc}>{product.description}</p>
@@ -257,12 +275,14 @@ const styles = {
     justifyContent: "space-between", gap: 10,
   },
   name: { color: "var(--text)", fontSize: 18, marginBottom: 4 },
-  brandBadge: {
+  metaBadge: {
     display: "inline-block", background: "var(--bg-input)",
-    border: "1px solid var(--border-light)", borderRadius: 6,
-    padding: "2px 10px", fontSize: 12, color: "var(--text-muted)",
+    border: "1px solid var(--border-light)", borderRadius: 999,
+    padding: "4px 10px", fontSize: 12, color: "var(--text-muted)",
     marginBottom: 8,
   },
+  stars: { display: "block", fontSize: 13, color: "var(--accent)", letterSpacing: 1, lineHeight: 1, marginBottom: 8 },
+  starsEmpty: { color: "var(--text-dim)" },
   price: { color: "var(--accent)", fontSize: 20, fontWeight: 700, marginBottom: 6 },
   desc: { color: "var(--text-muted)", fontSize: 14 },
 

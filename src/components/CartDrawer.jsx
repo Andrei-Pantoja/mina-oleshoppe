@@ -43,14 +43,19 @@ export default function CartDrawer({ open, onClose, onCheckout }) {
           )}
         </div>
 
-        {cart.length > 0 && (
-          <div style={styles.footer}>
-            <h4 style={{ color: "var(--text)" }}>Total: ₱{total.toLocaleString()}</h4>
-            <button onClick={() => { onClose(); onCheckout(); }} style={styles.checkoutBtn}>
-              💬 Checkout via Messenger
-            </button>
-          </div>
-        )}
+        <div style={styles.footer}>
+          {cart.length > 0 && (
+            <>
+              <h4 style={{ color: "var(--text)", margin: 0 }}>Total: ₱{total.toLocaleString()}</h4>
+              <button onClick={() => { onClose(); onCheckout(); }} style={styles.checkoutBtn}>
+                💬 Checkout via Messenger
+              </button>
+            </>
+          )}
+          <button onClick={onClose} style={styles.closeBottomBtn}>
+            Close
+          </button>
+        </div>
       </div>
     </>
   );
@@ -69,7 +74,17 @@ const styles = {
     display: "flex", justifyContent: "space-between",
     padding: 16, borderBottom: "1px solid var(--border)",
   },
-  closeBtn: { background: "none", border: "none", color: "var(--text)", cursor: "pointer" },
+  closeBtn: {
+    background: "var(--bg-hover)",
+    border: "1px solid var(--border-light)",
+    color: "var(--text)",
+    cursor: "pointer",
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    fontSize: 18,
+    lineHeight: 1,
+  },
   content: { flex: 1, overflowY: "auto", padding: 16 },
   empty: { textAlign: "center", color: "var(--text-muted)" },
   item: {
@@ -90,12 +105,24 @@ const styles = {
   },
   qtyNum: { color: "var(--text)", fontSize: 13, minWidth: 16, textAlign: "center" },
   removeBtn: { background: "none", border: "none", color: "var(--text-dim)", cursor: "pointer", paddingTop: 2 },
-  footer: { padding: 16, borderTop: "1px solid var(--border)" },
+  footer: { padding: 16, borderTop: "1px solid var(--border)", display: "grid", gap: 10 },
   checkoutBtn: {
     display: "block", width: "100%", marginTop: 10,
     background: "var(--accent)", color: "var(--accent-text)",
     textAlign: "center", padding: 12, borderRadius: 10,
     fontWeight: 700, fontSize: 15, border: "none", cursor: "pointer",
     boxSizing: "border-box",
+  },
+  closeBottomBtn: {
+    display: "block",
+    width: "100%",
+    background: "none",
+    border: "1px solid var(--border-light)",
+    color: "var(--text-muted)",
+    textAlign: "center",
+    padding: 10,
+    borderRadius: 10,
+    fontWeight: 700,
+    cursor: "pointer",
   },
 };

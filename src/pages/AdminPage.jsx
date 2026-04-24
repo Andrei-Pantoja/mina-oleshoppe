@@ -2,23 +2,23 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   collection, getDocs, addDoc, updateDoc, deleteDoc,
-  doc, query, orderBy, serverTimestamp, increment,
+  doc, query, orderBy, serverTimestamp, increment, onSnapshot,
 } from "firebase/firestore";
 import { db, storage } from "../firebase/config";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useAuth } from "../context/AuthContext";
+import {
+  DEFAULT_BRANDS_BY_CATEGORY,
+  DEFAULT_CATEGORIES,
+  getShopOptions,
+  saveShopOptions,
+  sortBrandUnitsDesc,
+} from "../utils/shopOptions";
 
 /* ─── Constants ─────────────────────────────────────────── */
-const CATEGORIES = ["GoPro", "Insta360", "Mounts & Clamps", "Accessories", "Bundle", "Other"];
+const CATEGORIES = DEFAULT_CATEGORIES;
 
-const BRANDS_BY_CATEGORY = {
-  GoPro: ["Hero 12", "Hero 11", "Hero 10", "Hero 9", "Hero 8", "Max", "Other"],
-  Insta360: ["X4", "X3", "X2", "ONE RS", "ONE X2", "GO 3", "Other"],
-  "Mounts & Clamps": ["RAM Mounts", "GoPro Official", "Peak Design", "Ulanzi", "Generic", "Other"],
-  Accessories: ["Batteries", "Chargers", "Cases", "Filters", "Memory Cards", "Other"],
-  Bundle: ["GoPro Bundle", "Insta360 Bundle", "Mixed Bundle", "Other"],
-  Other: ["Other"],
-};
+const BRANDS_BY_CATEGORY = DEFAULT_BRANDS_BY_CATEGORY;
 
 const SELLERS = [
   { label: "Sithis", url: "https://m.me/Sithis02" },
@@ -31,6 +31,7 @@ const EMPTY_FORM = {
   images: [], facebookUrl: SELLERS[0].url,
   category: "Accessories", brand: "",
   youtubeUrl: "",
+  rating: 0,
 };
 
 /* ─── Helpers ────────────────────────────────────────────── */
@@ -41,7 +42,7 @@ const getYouTubeId = (url) => {
 };
 
 export default function AdminPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   const [products, setProducts] = useState([]);
@@ -54,29 +55,107 @@ export default function AdminPage() {
   const [showForm, setShowForm] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
   const [adminSearch, setAdminSearch] = useState("");
-  const [activeTab, setActiveTab] = useState("products"); // "overview" | "products"
+  const [activeTab, setActiveTab] = useState("products"); // "overview" | "products" | "settings"
+
+  const [shopOptions, setShopOptions] = useState({ categories: CATEGORIES, brandsByCategory: BRANDS_BY_CATEGORY });
+  const [optionsLoading, setOptionsLoading] = useState(true);
+  const [optionsSaving, setOptionsSaving] = useState(false);
+  const [optionsDirty, setOptionsDirty] = useState(false);
+  const [newCategory, setNewCategory] = useState("");
+  const [newBrandByCategory, setNewBrandByCategory] = useState({});
 
   const showPopup = (msg) => {
     setStatusMessage(msg);
     setTimeout(() => setStatusMessage(null), 3000);
   };
 
-  useEffect(() => { if (!user) navigate("/"); }, [user, navigate]);
+  // With realtime Firestore subscription, these are no-ops kept to avoid larger refactors.
+  const fetchProducts = async () => true;
 
-  const fetchProducts = async () => {
-    setFetchLoading(true);
+  useEffect(() => {
+    if (!authLoading && !user) navigate("/");
+  }, [authLoading, user, navigate]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      setOptionsLoading(true);
+      try {
+        const opts = await getShopOptions();
+        if (!mounted) return;
+        setShopOptions(opts);
+        setOptionsDirty(false);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        if (mounted) setOptionsLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  const saveOptions = async () => {
+    setOptionsSaving(true);
     try {
-      const q = query(collection(db, "products"), orderBy("createdAt", "desc"));
-      const snap = await getDocs(q);
-      setProducts(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    } catch (err) {
-      console.error(err);
+      const saved = await saveShopOptions(shopOptions);
+      setShopOptions(saved);
+      setOptionsDirty(false);
+      showPopup("✅ Options saved!");
+      return true;
+    } catch (e) {
+      alert("Error saving options: " + e.message);
+      return false;
     } finally {
-      setFetchLoading(false);
+      setOptionsSaving(false);
     }
   };
 
-  useEffect(() => { fetchProducts(); }, []);
+  const confirmLeaveIfDirty = async () => {
+    if (!optionsDirty) return true;
+    const shouldSave = window.confirm("You have unsaved changes in Admin Settings.\n\nPress OK to save before leaving, or Cancel to stay on this page.");
+    if (!shouldSave) return false;
+    return await saveOptions();
+  };
+
+  // Warn on refresh/close when settings not saved.
+  useEffect(() => {
+    const handler = (e) => {
+      if (!optionsDirty) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [optionsDirty]);
+
+  // Expose a tiny global so Navbar can prompt on Logout / leaving admin.
+  useEffect(() => {
+    window.__minaAdminUnsaved = {
+      dirty: optionsDirty,
+      save: saveOptions,
+      message: "You have unsaved changes in Admin Settings. Save before leaving?",
+    };
+    return () => {
+      if (window.__minaAdminUnsaved) delete window.__minaAdminUnsaved;
+    };
+  }, [optionsDirty, shopOptions]);
+
+  useEffect(() => {
+    setFetchLoading(true);
+    const q = query(collection(db, "products"), orderBy("createdAt", "desc"));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        setProducts(snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((p) => !p?.isConfig));
+        setFetchLoading(false);
+      },
+      (err) => {
+        console.error(err);
+        setFetchLoading(false);
+      }
+    );
+    return unsub;
+  }, []);
 
   /* ── Stats ──────────────────────────────────────────────── */
   const totalProducts = products.length;
@@ -138,6 +217,7 @@ export default function AdminPage() {
         price: Number(form.price),
         youtubeUrl: form.youtubeUrl || "",
         brand: form.brand || "",
+        rating: Math.max(0, Math.min(5, Number(form.rating || 0))),
       };
 
       if (editingId) {
@@ -170,6 +250,7 @@ export default function AdminPage() {
       category: p.category || "Accessories",
       brand: p.brand || "",
       youtubeUrl: p.youtubeUrl || "",
+      rating: typeof p.rating === "number" ? p.rating : 0,
     });
     setImageFiles([]);
     setPreviewUrls(p.images?.length ? p.images : p.imageUrl ? [p.imageUrl] : []);
@@ -196,6 +277,13 @@ export default function AdminPage() {
 
   const getSellerLabel = (url) => SELLERS.find((s) => s.url === url)?.label || url;
 
+  if (authLoading) {
+    return (
+      <div style={{ ...s.page, display: "grid", placeItems: "center" }}>
+        <p style={{ color: "var(--text-muted)" }}>Loading admin…</p>
+      </div>
+    );
+  }
   if (!user) return null;
 
   const filteredProducts = products.filter((p) =>
@@ -222,13 +310,19 @@ export default function AdminPage() {
 
       {/* ── Tabs ── */}
       <div style={s.tabs}>
-        {["overview", "products"].map((t) => (
+        {["overview", "products", "settings"].map((t) => (
           <button
             key={t}
-            onClick={() => setActiveTab(t)}
+            onClick={async () => {
+              if (activeTab === "settings" && t !== "settings") {
+                const ok = await confirmLeaveIfDirty();
+                if (!ok) return;
+              }
+              setActiveTab(t);
+            }}
             style={{ ...s.tab, ...(activeTab === t ? s.tabActive : {}) }}
           >
-            {t === "overview" ? "📊 Overview" : "📦 Products"}
+            {t === "overview" ? "📊 Overview" : t === "products" ? "📦 Products" : "⚙️ Settings"}
           </button>
         ))}
       </div>
@@ -306,7 +400,7 @@ export default function AdminPage() {
                   </Field>
                   <Field label="Category">
                     <select name="category" value={form.category} onChange={handleChange} style={s.input}>
-                      {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+                      {(shopOptions.categories || CATEGORIES).map((c) => <option key={c}>{c}</option>)}
                     </select>
                   </Field>
                 </div>
@@ -315,8 +409,17 @@ export default function AdminPage() {
                 <Field label={`Brand / Unit (${form.category})`}>
                   <select name="brand" value={form.brand} onChange={handleChange} style={s.input}>
                     <option value="">— Select brand —</option>
-                    {(BRANDS_BY_CATEGORY[form.category] || []).map((b) => (
+                    {((shopOptions.brandsByCategory || {})[form.category] || BRANDS_BY_CATEGORY[form.category] || []).map((b) => (
                       <option key={b}>{b}</option>
+                    ))}
+                  </select>
+                </Field>
+
+                {/* Rating (admin-only) */}
+                <Field label="Rating (admin only)">
+                  <select name="rating" value={String(form.rating ?? 0)} onChange={handleChange} style={s.input}>
+                    {[0, 1, 2, 3, 4, 5].map((r) => (
+                      <option key={r} value={String(r)}>{r === 0 ? "0 (none)" : `${r} ⭐`}</option>
                     ))}
                   </select>
                 </Field>
@@ -440,6 +543,196 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+
+      {/* ════════════════════════════════════════════
+          TAB: SETTINGS (categories + brand/unit)
+      ════════════════════════════════════════════ */}
+      {activeTab === "settings" && (
+        <div style={s.card}>
+          <h2 style={s.cardTitle}>⚙️ Categories + Brand/Unit Options</h2>
+          {optionsLoading ? (
+            <p style={{ color: "var(--text-muted)" }}>Loading options…</p>
+          ) : (
+            <div style={{ display: "grid", gap: 18 }}>
+              {/* Categories */}
+              <div style={{ display: "grid", gap: 10 }}>
+                <p style={{ margin: 0, color: "var(--text-muted)", fontWeight: 600 }}>Categories</p>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <input
+                    value={newCategory}
+                    onChange={(e) => setNewCategory(e.target.value)}
+                    placeholder="Add new category (e.g. Drones)"
+                    style={{ ...s.input, maxWidth: 320 }}
+                  />
+                  <button
+                    type="button"
+                    disabled={!newCategory.trim() || optionsSaving}
+                    onClick={() => {
+                      const next = newCategory.trim();
+                      if (!next) return;
+                      setShopOptions((cur) => ({
+                        ...cur,
+                        categories: Array.from(new Set([...(cur.categories || []), next])),
+                        brandsByCategory: {
+                          ...(cur.brandsByCategory || {}),
+                          [next]: (cur.brandsByCategory || {})[next] || ["Other"],
+                        },
+                      }));
+                      setOptionsDirty(true);
+                      setNewCategory("");
+                    }}
+                    style={{ ...s.addBtn, padding: "10px 14px" }}
+                  >
+                    + Add
+                  </button>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {(shopOptions.categories || []).map((cat) => (
+                    <div key={cat} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      <input
+                        value={cat}
+                        onChange={(e) => {
+                          const nextName = e.target.value;
+                          setShopOptions((cur) => {
+                            const categories = (cur.categories || []).map((c) => (c === cat ? nextName : c));
+                            const brandsByCategory = { ...(cur.brandsByCategory || {}) };
+                            if (cat !== nextName) {
+                              brandsByCategory[nextName] = brandsByCategory[cat] || ["Other"];
+                              delete brandsByCategory[cat];
+                            }
+                            return { ...cur, categories, brandsByCategory };
+                          });
+                          setOptionsDirty(true);
+                        }}
+                        style={{ ...s.input, maxWidth: 260 }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShopOptions((cur) => {
+                            const categories = (cur.categories || []).filter((c) => c !== cat);
+                            const brandsByCategory = { ...(cur.brandsByCategory || {}) };
+                            delete brandsByCategory[cat];
+                            return { ...cur, categories, brandsByCategory };
+                          });
+                          setOptionsDirty(true);
+                        }}
+                        style={s.deleteBtn}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Brands/Units per category */}
+              <div style={{ display: "grid", gap: 10 }}>
+                <p style={{ margin: 0, color: "var(--text-muted)", fontWeight: 600 }}>Brand / Unit (per category)</p>
+                {(shopOptions.categories || []).map((cat) => {
+                  const list = sortBrandUnitsDesc((shopOptions.brandsByCategory || {})[cat] || []);
+                  const newVal = newBrandByCategory[cat] || "";
+                  return (
+                    <div key={cat} style={{ border: "1px solid var(--border)", borderRadius: 12, padding: 14 }}>
+                      <p style={{ margin: "0 0 10px", fontWeight: 700 }}>{cat}</p>
+
+                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+                        <input
+                          value={newVal}
+                          onChange={(e) => setNewBrandByCategory((cur) => ({ ...cur, [cat]: e.target.value }))}
+                          placeholder="Add brand/unit (e.g. X5)"
+                          style={{ ...s.input, maxWidth: 320 }}
+                        />
+                        <button
+                          type="button"
+                          disabled={!newVal.trim() || optionsSaving}
+                          onClick={() => {
+                            const next = newVal.trim();
+                            if (!next) return;
+                            setShopOptions((cur) => ({
+                              ...cur,
+                              brandsByCategory: {
+                                ...(cur.brandsByCategory || {}),
+                                [cat]: Array.from(new Set([...(cur.brandsByCategory?.[cat] || []), next])),
+                              },
+                            }));
+                            setNewBrandByCategory((cur) => ({ ...cur, [cat]: "" }));
+                            setOptionsDirty(true);
+                          }}
+                          style={{ ...s.addBtn, padding: "10px 14px" }}
+                        >
+                          + Add
+                        </button>
+                      </div>
+
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                        {list.length ? (
+                          list.map((b) => (
+                            <span
+                              key={b}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 8,
+                                background: "var(--bg-input)",
+                                border: "1px solid var(--border-light)",
+                                borderRadius: 999,
+                                padding: "6px 10px",
+                                fontSize: 12,
+                              }}
+                            >
+                              {b}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShopOptions((cur) => ({
+                                    ...cur,
+                                    brandsByCategory: {
+                                      ...(cur.brandsByCategory || {}),
+                                      [cat]: (cur.brandsByCategory?.[cat] || []).filter((x) => x !== b),
+                                    },
+                                  }));
+                                  setOptionsDirty(true);
+                                }}
+                                style={{
+                                  background: "none",
+                                  border: "none",
+                                  cursor: "pointer",
+                                  color: "var(--text-dim)",
+                                  fontSize: 14,
+                                  lineHeight: 1,
+                                }}
+                                aria-label={`Remove ${b}`}
+                                title="Remove"
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))
+                        ) : (
+                          <span style={{ color: "var(--text-muted)", fontSize: 13 }}>No brand/unit yet.</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div style={{ display: "flex", gap: 12 }}>
+                <button
+                  type="button"
+                  disabled={optionsSaving}
+                  onClick={saveOptions}
+                  style={s.saveBtn}
+                >
+                  {optionsSaving ? "Saving…" : "Save Options"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -473,7 +766,7 @@ const s = {
     background: "var(--bg)",
     color: "var(--text)",
     fontFamily: "sans-serif",
-    padding: "24px",
+    padding: "16px",
     maxWidth: 960,
     margin: "0 auto",
   },
@@ -483,8 +776,12 @@ const s = {
     padding: "12px 24px", borderRadius: 10, fontWeight: "bold", zIndex: 9999,
   },
   header: {
-    display: "flex", justifyContent: "space-between",
-    alignItems: "flex-start", marginBottom: 20,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 20,
+    gap: 12,
+    flexWrap: "wrap",
   },
   headerRight: { display: "flex", gap: 10 },
   title: { margin: 0, color: "var(--accent)", fontSize: 24 },
@@ -525,7 +822,7 @@ const s = {
   },
   formTitle: { margin: "0 0 20px", color: "var(--text)", fontSize: 18 },
   form: { display: "flex", flexDirection: "column", gap: 16 },
-  row2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 },
+  row2: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 },
   input: {
     padding: "10px 12px", background: "var(--bg-input)", border: "1px solid var(--border-light)",
     borderRadius: 8, color: "var(--text)", fontSize: 14, outline: "none",
@@ -564,6 +861,7 @@ const s = {
     background: "var(--bg-card)", border: "1px solid var(--border)",
     borderRadius: 10, padding: "12px 16px", display: "flex",
     alignItems: "center", gap: 14,
+    flexWrap: "wrap",
   },
   thumb: { width: 60, height: 60, borderRadius: 8, objectFit: "cover", flexShrink: 0 },
   productInfo: { flex: 1, display: "flex", flexDirection: "column", gap: 3 },
