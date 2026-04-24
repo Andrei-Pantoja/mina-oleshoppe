@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, doc, updateDoc, increment } from "firebase/firestore";
 import { db } from "../firebase/config";
 import ProductCard from "../components/ProductCard";
 import ProductModal from "../components/ProductModal";
@@ -12,10 +12,19 @@ import store2 from "../assets/store2.png";
 import store3 from "../assets/store3.png";
 import mapImage from "../assets/store3.png";
 
-const CATEGORIES = ["All", "GoPro", "Insta360", "Mounts & Clamps", "Accessories", "Other"];
+const CATEGORIES = ["All", "GoPro", "Insta360", "Mounts & Clamps", "Accessories", "Bundle", "Other"];
+
+const BRANDS_BY_CATEGORY = {
+  GoPro: ["Hero 12", "Hero 11", "Hero 10", "Hero 9", "Hero 8", "Max", "Other"],
+  Insta360: ["X4", "X3", "X2", "ONE RS", "ONE X2", "GO 3", "Other"],
+  "Mounts & Clamps": ["RAM Mounts", "GoPro Official", "Peak Design", "Ulanzi", "Generic", "Other"],
+  Accessories: ["Batteries", "Chargers", "Cases", "Filters", "Memory Cards", "Other"],
+  Bundle: ["GoPro Bundle", "Insta360 Bundle", "Mixed Bundle", "Other"],
+  Other: ["Other"],
+};
 
 function getMostCommonSellerUrl(cartItems) {
-  if (!cartItems || cartItems.length === 0) return "https://m.me/Sithis02";
+  if (!cartItems?.length) return "https://m.me/Sithis02";
   const counts = {};
   cartItems.forEach((item) => {
     const url = item.facebookUrl || "https://m.me/Sithis02";
@@ -30,12 +39,13 @@ export default function StorePage() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState("All");
+  const [activeBrand, setActiveBrand] = useState("All");
   const [search, setSearch] = useState("");
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [sortOption, setSortOption] = useState("Newest");
   const [previewImage, setPreviewImage] = useState(null);
-  const [inquiryPopup, setInquiryPopup] = useState(null); // { message, sellerUrl }
+  const [inquiryPopup, setInquiryPopup] = useState(null);
   const [copied, setCopied] = useState(false);
 
   const { cart } = useCart();
@@ -44,11 +54,7 @@ export default function StorePage() {
     const fetchProducts = async () => {
       try {
         const snap = await getDocs(collection(db, "products"));
-        const data = snap.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setProducts(data);
+        setProducts(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
       } catch (err) {
         console.error(err);
       } finally {
@@ -58,12 +64,33 @@ export default function StorePage() {
     fetchProducts();
   }, []);
 
+  /* ── Track product view ──────────────────────────────── */
+  const handleOpenProduct = async (product) => {
+    setSelectedProduct(product);
+    try {
+      await updateDoc(doc(db, "products", product.id), { views: increment(1) });
+    } catch (_) {}
+  };
+
+  /* ── Category change resets brand ─────────────────── */
+  const handleCategoryChange = (cat) => {
+    setActiveCategory(cat);
+    setActiveBrand("All");
+  };
+
+  /* ── Available brands for active category ─────────── */
+  const availableBrands = activeCategory !== "All"
+    ? ["All", ...(BRANDS_BY_CATEGORY[activeCategory] || [])]
+    : [];
+
+  /* ── Filtered + sorted products ─────────────────────── */
   const filtered = products
     .filter((p) => {
       if (!p) return false;
       const matchCat = activeCategory === "All" || p.category === activeCategory;
+      const matchBrand = activeBrand === "All" || p.brand === activeBrand;
       const matchSearch = (p.name || "").toLowerCase().includes(search.toLowerCase());
-      return matchCat && matchSearch;
+      return matchCat && matchBrand && matchSearch;
     })
     .sort((a, b) => {
       if (sortOption === "Price Low → High") return Number(a.price || 0) - Number(b.price || 0);
@@ -71,22 +98,15 @@ export default function StorePage() {
       return 0;
     });
 
-  // Show confirmation popup with the inquiry message
+  /* ── Checkout / inquiry ─────────────────────────────── */
   const handleCheckout = () => {
-    if (!cart || cart.length === 0) return;
-
+    if (!cart?.length) return;
     const lines = cart.map(
-      (item) =>
-        `• ${item.name} x${item.quantity || 1} - ₱${(Number(item.price) * (item.quantity || 1)).toLocaleString()}`
+      (item) => `• ${item.name} x${item.quantity || 1} - ₱${(Number(item.price) * (item.quantity || 1)).toLocaleString()}`
     );
-    const total = cart.reduce(
-      (sum, item) => sum + Number(item.price) * (item.quantity || 1),
-      0
-    );
-
+    const total = cart.reduce((sum, item) => sum + Number(item.price) * (item.quantity || 1), 0);
     const message = `Hello! I want to inquire if this is available:\n\n${lines.join("\n")}\n\nTotal: ₱${total.toLocaleString()}`;
-    const sellerUrl = getMostCommonSellerUrl(cart);
-    setInquiryPopup({ message, sellerUrl });
+    setInquiryPopup({ message, sellerUrl: getMostCommonSellerUrl(cart) });
     setCopied(false);
   };
 
@@ -97,31 +117,16 @@ export default function StorePage() {
     });
   };
 
-  const handleOpenMessenger = () => {
-    window.open(inquiryPopup.sellerUrl, "_blank");
-  };
-
-  const responsiveStyles = {
-    sidebar: {
-      width: isMobile ? "100%" : 200,
-      background: "#1c1c1c",
-      padding: 16,
-      borderRadius: 12,
-    },
-    grid: {
-      display: "grid",
-      gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(240px, 1fr))",
-      gap: 20,
-    },
-  };
-
+  /* ─── RENDER ─────────────────────────────────────────── */
   return (
     <div style={styles.page}>
+      {/* Hero */}
       <div style={styles.hero}>
         <h1 style={styles.heroTitle}>🎥 Action Camera Accessories</h1>
         <p style={styles.heroSub}>GoPro · Insta360 · Motorcycle Mounts & More</p>
       </div>
 
+      {/* Top bar */}
       <div style={styles.topBar}>
         <input
           type="text"
@@ -142,12 +147,13 @@ export default function StorePage() {
       </div>
 
       <div style={{ ...styles.contentWrapper, flexWrap: "wrap" }}>
-        <div style={responsiveStyles.sidebar}>
+        {/* Sidebar */}
+        <div style={{ ...styles.sidebar, width: isMobile ? "100%" : 200 }}>
           <h3 style={styles.sidebarTitle}>Categories</h3>
           {CATEGORIES.map((cat) => (
             <button
               key={cat}
-              onClick={() => setActiveCategory(cat)}
+              onClick={() => handleCategoryChange(cat)}
               style={{
                 ...styles.sideBtn,
                 ...(activeCategory === cat ? styles.sideBtnActive : {}),
@@ -156,11 +162,33 @@ export default function StorePage() {
               {cat}
             </button>
           ))}
+
+          {/* Brand sub-filter */}
+          {availableBrands.length > 1 && (
+            <>
+              <h3 style={{ ...styles.sidebarTitle, marginTop: 20 }}>Brand / Unit</h3>
+              {availableBrands.map((brand) => (
+                <button
+                  key={brand}
+                  onClick={() => setActiveBrand(brand)}
+                  style={{
+                    ...styles.sideBtn,
+                    ...(activeBrand === brand ? styles.sideBtnActive : {}),
+                    fontSize: 12,
+                  }}
+                >
+                  {brand}
+                </button>
+              ))}
+            </>
+          )}
         </div>
 
+        {/* Main content */}
         <div style={styles.mainContent}>
-          <p style={{ marginBottom: 10, color: "#888" }}>
+          <p style={{ marginBottom: 10, color: "var(--text-muted)" }}>
             {filtered.length} products found
+            {activeBrand !== "All" && ` · ${activeBrand}`}
           </p>
 
           {loading ? (
@@ -168,11 +196,15 @@ export default function StorePage() {
           ) : filtered.length === 0 ? (
             <div style={styles.empty}>No products found.</div>
           ) : (
-            <div style={responsiveStyles.grid}>
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(240px, 1fr))",
+              gap: 20,
+            }}>
               {filtered.map((product) => (
                 <motion.div
                   key={product.id}
-                  onClick={() => setSelectedProduct(product)}
+                  onClick={() => handleOpenProduct(product)}
                   style={{ cursor: "pointer" }}
                 >
                   <ProductCard product={product} />
@@ -183,19 +215,14 @@ export default function StorePage() {
         </div>
       </div>
 
-      {/* FOOTER */}
+      {/* Footer */}
       <footer style={styles.footer}>
         <div style={styles.footerContent}>
           <div style={styles.footerSection}>
             <h3 style={styles.footerTitle}>📍 Our Store</h3>
             <p style={styles.footerText}>
               Facebook Page:{" "}
-              <a
-                href="https://www.facebook.com/MinaOnlineShoppee"
-                target="_blank"
-                rel="noreferrer"
-                style={styles.fbPageLink}
-              >
+              <a href="https://www.facebook.com/MinaOnlineShoppee" target="_blank" rel="noreferrer" style={styles.fbPageLink}>
                 Mina OleShoppe
               </a>
               <br />
@@ -207,8 +234,8 @@ export default function StorePage() {
               style={styles.mapImage}
               alt="map"
               onClick={() => setPreviewImage(mapImage)}
-              onMouseOver={(e) => (e.currentTarget.style.boxShadow = "0 0 12px #d4ed00")}
-              onMouseOut={(e) => (e.currentTarget.style.boxShadow = "0 0 0 transparent")}
+              onMouseOver={(e) => (e.currentTarget.style.boxShadow = "0 0 12px var(--accent)")}
+              onMouseOut={(e) => (e.currentTarget.style.boxShadow = "none")}
             />
           </div>
 
@@ -216,15 +243,11 @@ export default function StorePage() {
             <h3 style={styles.footerTitle}>🏬 Store Preview</h3>
             <div style={styles.storeImages}>
               {[store1, store2, store3].map((img, i) => (
-                <img
-                  key={i}
-                  src={img}
-                  style={styles.storeImg}
+                <img key={i} src={img} style={styles.storeImg}
                   onClick={() => setPreviewImage(img)}
-                  onMouseOver={(e) => (e.currentTarget.style.boxShadow = "0 0 10px #d4ed00")}
-                  onMouseOut={(e) => (e.currentTarget.style.boxShadow = "0 0 0 transparent")}
-                  alt=""
-                />
+                  onMouseOver={(e) => (e.currentTarget.style.boxShadow = "0 0 10px var(--accent)")}
+                  onMouseOut={(e) => (e.currentTarget.style.boxShadow = "none")}
+                  alt="" />
               ))}
             </div>
           </div>
@@ -232,70 +255,59 @@ export default function StorePage() {
           <div style={styles.footerSection}>
             <h3 style={styles.footerTitle}>📞 Contact</h3>
             <p style={styles.footerText}>
-              📱 0966-654-5823<br />
-              📱 0967-403-5934<br />
-              📱 0915-720-5299<br />
-              📱 0929-555-5992
+              📱 0966-654-5823<br />📱 0967-403-5934<br />
+              📱 0915-720-5299<br />📱 0929-555-5992
             </p>
           </div>
         </div>
         <p style={styles.footerBottom}>© 2014 Mina OleShoppe</p>
       </footer>
 
-      {/* IMAGE PREVIEW MODAL */}
+      {/* Image preview */}
       {previewImage && (
         <div style={styles.overlay} onClick={() => setPreviewImage(null)}>
           <div style={styles.previewBox} onClick={(e) => e.stopPropagation()}>
             <img src={previewImage} style={styles.previewImage} alt="" />
             {previewImage === mapImage && (
               <a
-                href="https://www.google.com/maps/place/Puregold+-+C.M.+Recto+(999+Shopping+Mall)/@14.6062437,120.9733403,221m/data=!3m1!1e3!4m6!3m5!1s0x3397ca0ede72c809:0xed3a7ecddf8971ea!8m2!3d14.6063662!4d120.9737464!16s%2Fg%2F11bc6z98w7?entry=ttu&g_ep=EgoyMDI2MDQxMy4wIKXMDSoASAFQAw%3D%3D"
-                target="_blank"
-                rel="noreferrer"
-                style={styles.mapButton}
+                href="https://www.google.com/maps/place/Puregold+-+C.M.+Recto+(999+Shopping+Mall)/@14.6062437,120.9733403,221m"
+                target="_blank" rel="noreferrer" style={styles.mapButton}
               >
                 📍 Check location on Google Maps
               </a>
             )}
-            <button style={styles.previewClose} onClick={() => setPreviewImage(null)}>
-              ✕ Close
-            </button>
+            <button style={styles.previewClose} onClick={() => setPreviewImage(null)}>✕ Close</button>
           </div>
         </div>
       )}
 
-      {/* INQUIRY CONFIRMATION POPUP */}
+      {/* Inquiry popup (cart checkout) */}
       {inquiryPopup && (
         <div style={styles.overlay} onClick={() => setInquiryPopup(null)}>
           <div style={styles.inquiryBox} onClick={(e) => e.stopPropagation()}>
             <h3 style={styles.inquiryTitle}>📋 Confirm Your Inquiry</h3>
             <p style={styles.inquirySubtitle}>
-              Are you sure you want to inquire about these items? Copy the message then paste it in Messenger.
+              Copy the message then paste it in Messenger.
             </p>
-
-            {/* Message preview */}
             <div style={styles.inquiryMessage}>
               {inquiryPopup.message.split("\n").map((line, i) => (
                 <span key={i}>{line}<br /></span>
               ))}
             </div>
-
-            {/* Action buttons */}
             <div style={styles.inquiryBtns}>
               <button onClick={handleCopy} style={styles.copyBtn}>
                 {copied ? "✅ Copied!" : "📋 Copy Message"}
               </button>
-              <button onClick={handleOpenMessenger} style={styles.messengerBtn}>
+              <button onClick={() => window.open(inquiryPopup.sellerUrl, "_blank")} style={styles.messengerBtn}>
                 💬 Open Messenger
               </button>
-              <button onClick={() => setInquiryPopup(null)} style={styles.cancelInquiryBtn}>
-                Cancel
-              </button>
+              <button onClick={() => setInquiryPopup(null)} style={styles.cancelInquiryBtn}>Cancel</button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Product modal */}
       {selectedProduct && (
         <ProductModal
           product={selectedProduct}
@@ -303,11 +315,7 @@ export default function StorePage() {
         />
       )}
 
-      <CartDrawer
-        open={cartOpen}
-        onClose={() => setCartOpen(false)}
-        onCheckout={handleCheckout}
-      />
+      <CartDrawer open={cartOpen} onClose={() => setCartOpen(false)} onCheckout={handleCheckout} />
 
       <button onClick={() => setCartOpen(true)} style={styles.floatingCart}>
         🛒
@@ -318,141 +326,96 @@ export default function StorePage() {
 }
 
 const styles = {
-  mapButton: {
-    marginTop: 15,
-    background: "#d4ed00",
-    border: "none",
-    borderRadius: 999,
-    padding: "10px 20px",
-    cursor: "pointer",
-    fontWeight: "bold",
-    textDecoration: "none",
-    color: "#111",
-    display: "inline-block",
-  },
-
-  page: { background: "#0f0f0f", color: "#fff" },
-  hero: { padding: 40, textAlign: "center", borderBottom: "2px solid #d4ed00" },
-  heroTitle: { color: "#d4ed00" },
-  heroSub: { color: "#aaa" },
-
+  page: { background: "var(--bg)", color: "var(--text)", minHeight: "100vh" },
+  hero: { padding: 40, textAlign: "center", borderBottom: "2px solid var(--accent)" },
+  heroTitle: { color: "var(--accent)", fontSize: 28, fontWeight: 800 },
+  heroSub: { color: "var(--text-muted)", marginTop: 8 },
   topBar: { display: "flex", gap: 12, padding: 20, maxWidth: 1200, margin: "auto" },
-  search: { flex: 1, padding: 14, borderRadius: 999, background: "#1a1a1a", color: "#fff", border: "none" },
-  sort: { padding: 10, borderRadius: 8, background: "#1a1a1a", color: "#fff", border: "none" },
-
+  search: {
+    flex: 1, padding: 14, borderRadius: 999,
+    background: "var(--bg-card)", color: "var(--text)",
+    border: "1px solid var(--border)", outline: "none",
+  },
+  sort: {
+    padding: 10, borderRadius: 8,
+    background: "var(--bg-card)", color: "var(--text)",
+    border: "1px solid var(--border)",
+  },
   contentWrapper: { display: "flex", gap: 20, maxWidth: 1200, margin: "auto", padding: 20 },
-  sidebarTitle: { color: "#fff", marginBottom: 10, fontSize: 14 },
-  sideBtn: { width: "100%", padding: 10, color: "#aaa", background: "transparent", border: "none", cursor: "pointer", textAlign: "left", borderRadius: 6 },
-  sideBtnActive: { background: "#d4ed00", color: "#111" },
-
+  sidebar: { background: "var(--bg-card)", padding: 16, borderRadius: 12, border: "1px solid var(--border)" },
+  sidebarTitle: { color: "var(--text)", marginBottom: 10, fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 },
+  sideBtn: {
+    width: "100%", padding: 10, color: "var(--text-muted)",
+    background: "transparent", border: "none", cursor: "pointer",
+    textAlign: "left", borderRadius: 6, fontSize: 13,
+  },
+  sideBtnActive: { background: "var(--accent)", color: "var(--accent-text)", fontWeight: 700 },
   mainContent: { flex: 1 },
-
-  footer: { background: "#111", padding: 40, marginTop: 40 },
+  loading: { color: "var(--text-muted)" },
+  empty: { color: "var(--text-muted)" },
+  footer: { background: "var(--bg-card)", padding: 40, marginTop: 40, borderTop: "1px solid var(--border)" },
   footerContent: { display: "flex", flexWrap: "wrap", gap: 40, maxWidth: 1200, margin: "auto" },
   footerSection: { flex: "1 1 300px" },
-  footerTitle: { color: "#d4ed00" },
-  footerText: { color: "#aaa", lineHeight: 1.8 },
-  fbPageLink: { color: "#d4ed00", textDecoration: "underline", cursor: "pointer", fontWeight: "bold" },
-
+  footerTitle: { color: "var(--accent)", marginBottom: 12 },
+  footerText: { color: "var(--text-muted)", lineHeight: 1.8 },
+  fbPageLink: { color: "var(--accent)", textDecoration: "underline", fontWeight: "bold" },
   storeImages: { display: "flex", gap: 10 },
-  storeImg: { width: 80, height: 80, cursor: "pointer", borderRadius: 6 },
-  mapImage: { width: "100%", height: 200, objectFit: "cover", cursor: "pointer", borderRadius: 10 },
-  footerBottom: { textAlign: "center", marginTop: 20, color: "#555" },
-
+  storeImg: { width: 80, height: 80, cursor: "pointer", borderRadius: 6, objectFit: "cover" },
+  mapImage: { width: "100%", height: 200, objectFit: "cover", cursor: "pointer", borderRadius: 10, marginTop: 10, transition: "box-shadow 0.2s" },
+  footerBottom: { textAlign: "center", marginTop: 20, color: "var(--text-dim)" },
   floatingCart: {
     position: "fixed", bottom: 20, right: 20,
     width: 60, height: 60, borderRadius: "50%",
-    background: "#d4ed00", border: "none", cursor: "pointer",
-    fontSize: 22,
+    background: "var(--accent)", border: "none",
+    cursor: "pointer", fontSize: 22,
   },
   badge: {
     position: "absolute", top: -6, right: -6,
     background: "red", color: "#fff",
     borderRadius: "50%", padding: "2px 6px", fontSize: 11,
   },
-
   overlay: {
-    position: "fixed", top: 0, left: 0,
-    width: "100%", height: "100%",
-    background: "rgba(0,0,0,0.85)",
-    display: "flex", justifyContent: "center", alignItems: "center",
-    zIndex: 2000,
+    position: "fixed", top: 0, left: 0, width: "100%", height: "100%",
+    background: "var(--overlay)", display: "flex",
+    justifyContent: "center", alignItems: "center", zIndex: 2000,
   },
-
   previewBox: {
     maxWidth: "70%", maxHeight: "80%",
     display: "flex", flexDirection: "column", alignItems: "center",
   },
   previewImage: { width: "100%", maxHeight: "75vh", objectFit: "contain", borderRadius: 12 },
   previewClose: {
-    marginTop: 15, background: "#d4ed00", border: "none",
+    marginTop: 15, background: "var(--accent)", border: "none",
     borderRadius: 999, padding: "10px 20px", cursor: "pointer", fontWeight: "bold",
   },
-
+  mapButton: {
+    marginTop: 15, background: "var(--accent)", border: "none", borderRadius: 999,
+    padding: "10px 20px", cursor: "pointer", fontWeight: "bold",
+    textDecoration: "none", color: "var(--accent-text)", display: "inline-block",
+  },
   inquiryBox: {
-    background: "#1a1a1a",
-    border: "1px solid #2a2a2a",
-    borderRadius: 16,
-    padding: 28,
-    width: "90%",
-    maxWidth: 460,
-    display: "flex",
-    flexDirection: "column",
-    gap: 16,
+    background: "var(--bg-card)", border: "1px solid var(--border)",
+    borderRadius: 16, padding: 28, width: "90%", maxWidth: 460,
+    display: "flex", flexDirection: "column", gap: 16,
   },
-  inquiryTitle: {
-    margin: 0,
-    color: "#d4ed00",
-    fontSize: 18,
-    fontWeight: 700,
-  },
-  inquirySubtitle: {
-    margin: 0,
-    color: "#aaa",
-    fontSize: 13,
-    lineHeight: 1.6,
-  },
+  inquiryTitle: { margin: 0, color: "var(--accent)", fontSize: 18, fontWeight: 700 },
+  inquirySubtitle: { margin: 0, color: "var(--text-muted)", fontSize: 13, lineHeight: 1.6 },
   inquiryMessage: {
-    background: "#111",
-    border: "1px solid #333",
-    borderRadius: 10,
-    padding: "14px 16px",
-    color: "#fff",
-    fontSize: 14,
-    lineHeight: 1.8,
+    background: "var(--bg-input)", border: "1px solid var(--border-light)",
+    borderRadius: 10, padding: "14px 16px", color: "var(--text)", fontSize: 14, lineHeight: 1.8,
   },
-  inquiryBtns: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 10,
-  },
+  inquiryBtns: { display: "flex", flexDirection: "column", gap: 10 },
   copyBtn: {
-    background: "#2a2a2a",
-    border: "1px solid #444",
-    color: "#fff",
-    borderRadius: 10,
-    padding: "12px 0",
-    fontWeight: 600,
-    fontSize: 14,
-    cursor: "pointer",
+    background: "var(--bg-hover)", border: "1px solid var(--border-light)",
+    color: "var(--text)", borderRadius: 10, padding: "12px 0",
+    fontWeight: 600, fontSize: 14, cursor: "pointer",
   },
   messengerBtn: {
-    background: "#d4ed00",
-    border: "none",
-    color: "#111",
-    borderRadius: 10,
-    padding: "12px 0",
-    fontWeight: 700,
-    fontSize: 14,
-    cursor: "pointer",
+    background: "var(--accent)", border: "none", color: "var(--accent-text)",
+    borderRadius: 10, padding: "12px 0", fontWeight: 700, fontSize: 14, cursor: "pointer",
   },
   cancelInquiryBtn: {
-    background: "none",
-    border: "1px solid #333",
-    color: "#666",
-    borderRadius: 10,
-    padding: "10px 0",
-    fontSize: 13,
-    cursor: "pointer",
+    background: "none", border: "1px solid var(--border)", color: "var(--text-dim)",
+    borderRadius: 10, padding: "10px 0", fontSize: 13, cursor: "pointer",
   },
 };

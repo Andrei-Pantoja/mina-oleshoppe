@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { useCart } from "../context/CartContext";
 
+const getYouTubeId = (url) => {
+  if (!url) return null;
+  const m = url.match(/(?:youtu\.be\/|v=|embed\/)([A-Za-z0-9_-]{11})/);
+  return m ? m[1] : null;
+};
+
 export default function ProductModal({ product, onClose }) {
   const { addToCart, updateQuantity, getQuantity } = useCart();
 
@@ -10,249 +16,288 @@ export default function ProductModal({ product, onClose }) {
     ? [product.imageUrl]
     : [];
 
-  const [index, setIndex] = useState(0);
+  const [imgIndex, setImgIndex] = useState(0);
   const [qty, setQty] = useState(1);
+  const [showInquiry, setShowInquiry] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  const nextImage = () => setIndex((prev) => (prev + 1) % images.length);
-  const prevImage = () => setIndex((prev) => (prev - 1 + images.length) % images.length);
+  const nextImage = () => setImgIndex((p) => (p + 1) % images.length);
+  const prevImage = () => setImgIndex((p) => (p - 1 + images.length) % images.length);
 
   const inCartQty = getQuantity(product?.id);
   const inCart = inCartQty > 0;
+  const youtubeId = getYouTubeId(product.youtubeUrl);
+
+  /* ── Build single-item inquiry message ────────────── */
+  const buildInquiryMessage = () =>
+    `Hello! I want to inquire if this is available:\n\n• ${product.name} x1 - ₱${Number(product.price).toLocaleString()}\n\nTotal: ₱${Number(product.price).toLocaleString()}`;
+
+  const handleInquire = () => {
+    setShowInquiry(true);
+    setCopied(false);
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(buildInquiryMessage()).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    });
+  };
+
+  const handleOpenMessenger = () => {
+    if (product.facebookUrl) window.open(product.facebookUrl, "_blank");
+  };
 
   if (!product) return null;
 
   return (
     <div style={styles.overlay} onClick={onClose}>
-      <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
 
-        {/* IMAGE */}
-        <div style={styles.imageWrapper}>
-          <img
-            src={images[index] || "https://via.placeholder.com/400x300?text=No+Image"}
-            alt={product.name}
-            style={styles.image}
-          />
-          {images.length > 1 && (
-            <>
-              <button onClick={prevImage} style={styles.arrowLeft}>‹</button>
-              <button onClick={nextImage} style={styles.arrowRight}>›</button>
-            </>
-          )}
+      {/* ── Single-item inquiry popup ─────────────────── */}
+      {showInquiry && (
+        <div style={styles.inquiryOverlay} onClick={(e) => e.stopPropagation()}>
+          <div style={styles.inquiryBox}>
+            <h3 style={styles.inquiryTitle}>💬 Inquire About This Item</h3>
+            <p style={styles.inquirySubtitle}>
+              Copy the message, then paste it in Messenger to inquire.
+            </p>
+            <div style={styles.inquiryMessage}>
+              {buildInquiryMessage().split("\n").map((line, i) => (
+                <span key={i}>{line}<br /></span>
+              ))}
+            </div>
+            <div style={styles.inquiryBtns}>
+              <button onClick={handleCopy} style={styles.copyBtn}>
+                {copied ? "✅ Copied!" : "📋 Copy Message"}
+              </button>
+              <button onClick={handleOpenMessenger} style={styles.messengerBtn}>
+                💬 Open Messenger
+              </button>
+              <button onClick={() => setShowInquiry(false)} style={styles.cancelBtn2}>
+                ← Back
+              </button>
+            </div>
+          </div>
         </div>
+      )}
 
-        {/* INFO */}
-        <div style={styles.info}>
-          <div>
-            <h2 style={styles.name}>{product.name}</h2>
-            <p style={styles.price}>₱{Number(product.price).toLocaleString()}</p>
-            <p style={styles.desc}>{product.description}</p>
+      {/* ── Main modal ───────────────────────────────── */}
+      {!showInquiry && (
+        <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+
+          {/* Image carousel */}
+          <div style={styles.imageWrapper}>
+            <img
+              src={images[imgIndex] || "https://via.placeholder.com/400x300?text=No+Image"}
+              alt={product.name}
+              style={styles.image}
+            />
+            {images.length > 1 && (
+              <>
+                <button onClick={prevImage} style={styles.arrowLeft}>‹</button>
+                <button onClick={nextImage} style={styles.arrowRight}>›</button>
+              </>
+            )}
+            {/* Dot indicators */}
+            {images.length > 1 && (
+              <div style={styles.dots}>
+                {images.map((_, i) => (
+                  <span
+                    key={i}
+                    onClick={(e) => { e.stopPropagation(); setImgIndex(i); }}
+                    style={i === imgIndex ? styles.dotActive : styles.dot}
+                  />
+                ))}
+              </div>
+            )}
           </div>
 
-          <div style={styles.bottomArea}>
+          {/* Info */}
+          <div style={styles.info}>
+            <div>
+              <h2 style={styles.name}>{product.name}</h2>
+              {product.brand && (
+                <span style={styles.brandBadge}>{product.brand}</span>
+              )}
+              <p style={styles.price}>₱{Number(product.price).toLocaleString()}</p>
+              {product.description && (
+                <p style={styles.desc}>{product.description}</p>
+              )}
+            </div>
 
-            {inCart ? (
-              // Already in cart — show quantity editor
-              <div>
-                <p style={styles.inCartLabel}>✅ In your cart</p>
-                <div style={styles.qtyRow}>
-                  <span style={styles.qtyLabel}>Quantity:</span>
-                  <div style={styles.qtyControls}>
-                    <button
-                      style={styles.qtyBtn}
-                      onClick={() => updateQuantity(product.id, inCartQty - 1)}
-                    >−</button>
-                    <span style={styles.qtyNum}>{inCartQty}</span>
-                    <button
-                      style={styles.qtyBtn}
-                      onClick={() => updateQuantity(product.id, inCartQty + 1)}
-                    >+</button>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              // Not in cart — show qty picker + add button
-              <div>
-                <div style={styles.qtyRow}>
-                  <span style={styles.qtyLabel}>Quantity:</span>
-                  <div style={styles.qtyControls}>
-                    <button
-                      style={styles.qtyBtn}
-                      onClick={() => setQty((q) => Math.max(1, q - 1))}
-                    >−</button>
-                    <span style={styles.qtyNum}>{qty}</span>
-                    <button
-                      style={styles.qtyBtn}
-                      onClick={() => setQty((q) => q + 1)}
-                    >+</button>
-                  </div>
-                </div>
-
-                <div style={styles.buttonRow}>
-                  <button
-                    onClick={() => { addToCart(product, qty); }}
-                    style={styles.addBtn}
-                  >
-                    🛒 Add to Cart
-                  </button>
-
-                  {product.facebookUrl && (
-                    <a
-                      href={product.facebookUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={styles.inquireBtn}
-                    >
-                      💬 Chat
-                    </a>
-                  )}
-                </div>
+            {/* YouTube embed */}
+            {youtubeId && (
+              <div style={styles.ytWrap}>
+                <p style={styles.ytLabel}>▶️ Product Video</p>
+                <iframe
+                  src={`https://www.youtube.com/embed/${youtubeId}`}
+                  title="Product video"
+                  style={styles.ytFrame}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
               </div>
             )}
 
-            <button onClick={onClose} style={styles.closeBtn}>Close</button>
+            {/* Cart / Actions */}
+            <div style={styles.bottomArea}>
+              {inCart ? (
+                <div>
+                  <p style={styles.inCartLabel}>✅ In your cart</p>
+                  <div style={styles.qtyRow}>
+                    <span style={styles.qtyLabel}>Quantity:</span>
+                    <div style={styles.qtyControls}>
+                      <button style={styles.qtyBtn} onClick={() => updateQuantity(product.id, inCartQty - 1)}>−</button>
+                      <span style={styles.qtyNum}>{inCartQty}</span>
+                      <button style={styles.qtyBtn} onClick={() => updateQuantity(product.id, inCartQty + 1)}>+</button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div style={styles.qtyRow}>
+                    <span style={styles.qtyLabel}>Quantity:</span>
+                    <div style={styles.qtyControls}>
+                      <button style={styles.qtyBtn} onClick={() => setQty((q) => Math.max(1, q - 1))}>−</button>
+                      <span style={styles.qtyNum}>{qty}</span>
+                      <button style={styles.qtyBtn} onClick={() => setQty((q) => q + 1)}>+</button>
+                    </div>
+                  </div>
+
+                  <div style={styles.buttonRow}>
+                    <button onClick={() => addToCart(product, qty)} style={styles.addBtn}>
+                      🛒 Add to Cart
+                    </button>
+                    {/* Single-item inquiry button */}
+                    <button onClick={handleInquire} style={styles.inquireBtn}>
+                      💬 Inquire
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <button onClick={onClose} style={styles.closeBtn}>Close</button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
 
 const styles = {
   overlay: {
-    position: "fixed",
-    top: 0, left: 0,
-    width: "100%", height: "100%",
-    background: "rgba(0,0,0,0.7)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 999,
-    padding: 10,
+    position: "fixed", top: 0, left: 0, width: "100%", height: "100%",
+    background: "var(--overlay)", display: "flex",
+    justifyContent: "center", alignItems: "center",
+    zIndex: 999, padding: 10,
   },
+
+  /* Inquiry popup */
+  inquiryOverlay: {
+    display: "flex", justifyContent: "center", alignItems: "center",
+    width: "100%",
+  },
+  inquiryBox: {
+    background: "var(--bg-card)", border: "1px solid var(--border)",
+    borderRadius: 16, padding: 28, width: "90%", maxWidth: 420,
+    display: "flex", flexDirection: "column", gap: 14,
+  },
+  inquiryTitle: { margin: 0, color: "var(--accent)", fontSize: 18, fontWeight: 700 },
+  inquirySubtitle: { margin: 0, color: "var(--text-muted)", fontSize: 13, lineHeight: 1.6 },
+  inquiryMessage: {
+    background: "var(--bg-input)", border: "1px solid var(--border-light)",
+    borderRadius: 10, padding: "14px 16px", color: "var(--text)", fontSize: 14, lineHeight: 1.8,
+  },
+  inquiryBtns: { display: "flex", flexDirection: "column", gap: 10 },
+  copyBtn: {
+    background: "var(--bg-hover)", border: "1px solid var(--border-light)",
+    color: "var(--text)", borderRadius: 10, padding: "12px 0",
+    fontWeight: 600, fontSize: 14, cursor: "pointer",
+  },
+  messengerBtn: {
+    background: "var(--accent)", border: "none", color: "var(--accent-text)",
+    borderRadius: 10, padding: "12px 0", fontWeight: 700, fontSize: 14, cursor: "pointer",
+  },
+  cancelBtn2: {
+    background: "none", border: "1px solid var(--border)", color: "var(--text-muted)",
+    borderRadius: 10, padding: "10px 0", fontSize: 13, cursor: "pointer",
+  },
+
+  /* Main modal */
   modal: {
-    background: "#1a1a1a",
-    borderRadius: 12,
-    display: "flex",
-    flexDirection: "column",
-    width: "100%",
-    maxWidth: 500,
-    maxHeight: "90vh",
-    overflowY: "auto",
+    background: "var(--bg-card)", borderRadius: 12,
+    display: "flex", flexDirection: "column",
+    width: "100%", maxWidth: 500, maxHeight: "90vh", overflowY: "auto",
   },
-  imageWrapper: {
-    position: "relative",
-    width: "100%",
-  },
+  imageWrapper: { position: "relative", width: "100%" },
   image: {
-    width: "100%",
-    height: "auto",
-    maxHeight: 300,
-    objectFit: "cover",
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
+    width: "100%", height: "auto", maxHeight: 300, objectFit: "cover",
+    borderTopLeftRadius: 12, borderTopRightRadius: 12,
   },
   arrowLeft: {
-    position: "absolute", top: "50%", left: 10,
-    transform: "translateY(-50%)",
-    background: "rgba(0,0,0,0.6)", color: "#fff",
-    border: "none", fontSize: 24, padding: "4px 10px",
-    cursor: "pointer", borderRadius: 6,
+    position: "absolute", top: "50%", left: 10, transform: "translateY(-50%)",
+    background: "rgba(0,0,0,0.6)", color: "#fff", border: "none",
+    fontSize: 24, padding: "4px 10px", cursor: "pointer", borderRadius: 6,
   },
   arrowRight: {
-    position: "absolute", top: "50%", right: 10,
-    transform: "translateY(-50%)",
-    background: "rgba(0,0,0,0.6)", color: "#fff",
-    border: "none", fontSize: 24, padding: "4px 10px",
-    cursor: "pointer", borderRadius: 6,
+    position: "absolute", top: "50%", right: 10, transform: "translateY(-50%)",
+    background: "rgba(0,0,0,0.6)", color: "#fff", border: "none",
+    fontSize: 24, padding: "4px 10px", cursor: "pointer", borderRadius: 6,
   },
-  info: {
-    padding: 15,
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "space-between",
-    gap: 10,
+  dots: {
+    position: "absolute", bottom: 8, left: "50%", transform: "translateX(-50%)",
+    display: "flex", gap: 6,
   },
-  name: { color: "#fff", fontSize: 18 },
-  price: { color: "#d4ed00", fontSize: 18, fontWeight: 700 },
-  desc: { color: "#aaa", fontSize: 14 },
-  bottomArea: { marginTop: 10, display: "flex", flexDirection: "column", gap: 12 },
+  dot: { width: 7, height: 7, borderRadius: "50%", background: "rgba(255,255,255,0.4)", cursor: "pointer" },
+  dotActive: { width: 7, height: 7, borderRadius: "50%", background: "var(--accent)", cursor: "pointer" },
 
-  inCartLabel: {
-    color: "#d4ed00",
-    fontWeight: 600,
-    fontSize: 14,
+  info: {
+    padding: 16, display: "flex", flexDirection: "column",
+    justifyContent: "space-between", gap: 10,
+  },
+  name: { color: "var(--text)", fontSize: 18, marginBottom: 4 },
+  brandBadge: {
+    display: "inline-block", background: "var(--bg-input)",
+    border: "1px solid var(--border-light)", borderRadius: 6,
+    padding: "2px 10px", fontSize: 12, color: "var(--text-muted)",
     marginBottom: 8,
   },
+  price: { color: "var(--accent)", fontSize: 20, fontWeight: 700, marginBottom: 6 },
+  desc: { color: "var(--text-muted)", fontSize: 14 },
 
-  qtyRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 12,
-  },
-  qtyLabel: {
-    color: "#aaa",
-    fontSize: 14,
-  },
+  ytWrap: { marginTop: 4 },
+  ytLabel: { color: "var(--text-muted)", fontSize: 12, marginBottom: 6, fontWeight: 600 },
+  ytFrame: { width: "100%", height: 200, border: "none", borderRadius: 8, display: "block" },
+
+  bottomArea: { marginTop: 10, display: "flex", flexDirection: "column", gap: 12 },
+  inCartLabel: { color: "var(--accent)", fontWeight: 600, fontSize: 14, marginBottom: 8 },
+  qtyRow: { display: "flex", alignItems: "center", gap: 12, marginBottom: 12 },
+  qtyLabel: { color: "var(--text-muted)", fontSize: 14 },
   qtyControls: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    background: "#2a2a2a",
-    border: "1px solid #d4ed00",
-    borderRadius: 8,
-    padding: "4px 10px",
+    display: "flex", alignItems: "center", gap: 8,
+    background: "var(--bg-input)", border: "1px solid var(--accent)",
+    borderRadius: 8, padding: "4px 10px",
   },
   qtyBtn: {
-    background: "none",
-    border: "none",
-    color: "#d4ed00",
-    fontSize: 18,
-    fontWeight: 700,
-    cursor: "pointer",
-    padding: "0 4px",
-    lineHeight: 1,
+    background: "none", border: "none", color: "var(--accent)",
+    fontSize: 18, fontWeight: 700, cursor: "pointer", padding: "0 4px", lineHeight: 1,
   },
-  qtyNum: {
-    color: "#fff",
-    fontSize: 15,
-    fontWeight: 600,
-    minWidth: 20,
-    textAlign: "center",
-  },
-
-  buttonRow: {
-    display: "flex",
-    gap: 10,
-  },
+  qtyNum: { color: "var(--text)", fontSize: 15, fontWeight: 600, minWidth: 20, textAlign: "center" },
+  buttonRow: { display: "flex", gap: 10 },
   addBtn: {
-    flex: 1,
-    padding: "12px",
-    background: "#d4ed00",
-    border: "none",
-    borderRadius: 8,
-    fontWeight: 600,
-    cursor: "pointer",
-    fontSize: 14,
+    flex: 1, padding: 12, background: "var(--accent)", border: "none",
+    borderRadius: 8, fontWeight: 600, cursor: "pointer", fontSize: 14,
+    color: "var(--accent-text)",
   },
   inquireBtn: {
-    flex: 1,
-    background: "#d4ed00",
-    color: "#111",
-    padding: "12px",
-    borderRadius: 8,
-    textDecoration: "none",
-    fontWeight: 600,
-    textAlign: "center",
-    fontSize: 14,
+    flex: 1, padding: 12, background: "transparent",
+    border: "2px solid var(--accent)", borderRadius: 8,
+    fontWeight: 600, cursor: "pointer", fontSize: 14,
+    color: "var(--accent)",
   },
   closeBtn: {
-    width: "100%",
-    background: "none",
-    border: "1px solid #444",
-    color: "#aaa",
-    padding: "10px",
-    borderRadius: 6,
-    cursor: "pointer",
+    width: "100%", background: "none", border: "1px solid var(--border-light)",
+    color: "var(--text-muted)", padding: 10, borderRadius: 6, cursor: "pointer",
   },
 };

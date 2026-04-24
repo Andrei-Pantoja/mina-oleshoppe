@@ -2,13 +2,23 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   collection, getDocs, addDoc, updateDoc, deleteDoc,
-  doc, query, orderBy, serverTimestamp
+  doc, query, orderBy, serverTimestamp, increment,
 } from "firebase/firestore";
 import { db, storage } from "../firebase/config";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useAuth } from "../context/AuthContext";
 
-const CATEGORIES = ["GoPro", "Insta360", "Mounts & Clamps", "Accessories", "Other"];
+/* ─── Constants ─────────────────────────────────────────── */
+const CATEGORIES = ["GoPro", "Insta360", "Mounts & Clamps", "Accessories", "Bundle", "Other"];
+
+const BRANDS_BY_CATEGORY = {
+  GoPro: ["Hero 12", "Hero 11", "Hero 10", "Hero 9", "Hero 8", "Max", "Other"],
+  Insta360: ["X4", "X3", "X2", "ONE RS", "ONE X2", "GO 3", "Other"],
+  "Mounts & Clamps": ["RAM Mounts", "GoPro Official", "Peak Design", "Ulanzi", "Generic", "Other"],
+  Accessories: ["Batteries", "Chargers", "Cases", "Filters", "Memory Cards", "Other"],
+  Bundle: ["GoPro Bundle", "Insta360 Bundle", "Mixed Bundle", "Other"],
+  Other: ["Other"],
+};
 
 const SELLERS = [
   { label: "Sithis", url: "https://m.me/Sithis02" },
@@ -18,7 +28,16 @@ const SELLERS = [
 
 const EMPTY_FORM = {
   name: "", price: "", description: "",
-  images: [], facebookUrl: SELLERS[0].url, category: "Accessories",
+  images: [], facebookUrl: SELLERS[0].url,
+  category: "Accessories", brand: "",
+  youtubeUrl: "",
+};
+
+/* ─── Helpers ────────────────────────────────────────────── */
+const getYouTubeId = (url) => {
+  if (!url) return null;
+  const m = url.match(/(?:youtu\.be\/|v=|embed\/)([A-Za-z0-9_-]{11})/);
+  return m ? m[1] : null;
 };
 
 export default function AdminPage() {
@@ -35,15 +54,14 @@ export default function AdminPage() {
   const [showForm, setShowForm] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
   const [adminSearch, setAdminSearch] = useState("");
+  const [activeTab, setActiveTab] = useState("products"); // "overview" | "products"
 
   const showPopup = (msg) => {
     setStatusMessage(msg);
     setTimeout(() => setStatusMessage(null), 3000);
   };
 
-  useEffect(() => {
-    if (!user) navigate("/");
-  }, [user, navigate]);
+  useEffect(() => { if (!user) navigate("/"); }, [user, navigate]);
 
   const fetchProducts = async () => {
     setFetchLoading(true);
@@ -60,33 +78,41 @@ export default function AdminPage() {
 
   useEffect(() => { fetchProducts(); }, []);
 
+  /* ── Stats ──────────────────────────────────────────────── */
+  const totalProducts = products.length;
+  const totalViews = products.reduce((s, p) => s + (p.views || 0), 0);
+  const topProduct = [...products].sort((a, b) => (b.views || 0) - (a.views || 0))[0];
+  const categoryCounts = CATEGORIES.reduce((acc, c) => {
+    acc[c] = products.filter((p) => p.category === c).length;
+    return acc;
+  }, {});
+
+  /* ── Form handlers ──────────────────────────────────────── */
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setForm((current) => ({ ...current, [name]: value }));
+    setForm((cur) => {
+      const next = { ...cur, [name]: value };
+      // reset brand when category changes
+      if (name === "category") next.brand = "";
+      return next;
+    });
   };
 
   const handleFileChange = (e) => {
     const files = Array.from(e.target.files || []);
-    if (!files.length) {
-      setImageFiles([]);
-      setPreviewUrls([]);
-      return;
-    }
+    if (!files.length) { setImageFiles([]); setPreviewUrls([]); return; }
     setImageFiles(files);
-    setPreviewUrls(files.map((file) => URL.createObjectURL(file)));
-    setForm((current) => ({ ...current, images: [] }));
+    setPreviewUrls(files.map((f) => URL.createObjectURL(f)));
+    setForm((cur) => ({ ...cur, images: [] }));
   };
 
-  const removePreviewImage = (index) => {
+  const removePreviewImage = (idx) => {
     if (imageFiles.length > 0) {
-      setImageFiles((current) => current.filter((_, idx) => idx !== index));
-      setPreviewUrls((current) => current.filter((_, idx) => idx !== index));
-      return;
+      setImageFiles((cur) => cur.filter((_, i) => i !== idx));
+      setPreviewUrls((cur) => cur.filter((_, i) => i !== idx));
+    } else {
+      setForm((cur) => ({ ...cur, images: cur.images.filter((_, i) => i !== idx) }));
     }
-    setForm((current) => ({
-      ...current,
-      images: current.images?.filter((_, idx) => idx !== index) || [],
-    }));
   };
 
   const handleSubmit = async (e) => {
@@ -95,14 +121,14 @@ export default function AdminPage() {
     setLoading(true);
     try {
       let finalImageUrls = form.images?.length ? form.images : [];
-
       if (imageFiles.length > 0) {
-        const uploadPromises = imageFiles.map(async (file) => {
-          const imageRef = ref(storage, `product-images/${Date.now()}-${file.name}`);
-          const snapshot = await uploadBytes(imageRef, file);
-          return getDownloadURL(snapshot.ref);
-        });
-        finalImageUrls = await Promise.all(uploadPromises);
+        finalImageUrls = await Promise.all(
+          imageFiles.map(async (file) => {
+            const r = ref(storage, `product-images/${Date.now()}-${file.name}`);
+            const snap = await uploadBytes(r, file);
+            return getDownloadURL(snap.ref);
+          })
+        );
       }
 
       const productData = {
@@ -110,58 +136,54 @@ export default function AdminPage() {
         images: finalImageUrls,
         imageUrl: finalImageUrls[0] || "",
         price: Number(form.price),
+        youtubeUrl: form.youtubeUrl || "",
+        brand: form.brand || "",
       };
 
       if (editingId) {
-        await updateDoc(doc(db, "products", editingId), {
-          ...productData,
-          updatedAt: serverTimestamp(),
-        });
+        await updateDoc(doc(db, "products", editingId), { ...productData, updatedAt: serverTimestamp() });
         showPopup("✅ Product updated!");
       } else {
         await addDoc(collection(db, "products"), {
           ...productData,
+          views: 0,
           createdAt: serverTimestamp(),
         });
-        showPopup("✅ Product added successfully!");
+        showPopup("✅ Product added!");
       }
-      setForm(EMPTY_FORM);
-      setImageFiles([]);
-      setPreviewUrls([]);
-      setEditingId(null);
-      setShowForm(false);
+      cancelForm();
       await fetchProducts();
     } catch (err) {
-      alert("Error saving product: " + err.message);
+      alert("Error: " + err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleEdit = (product) => {
+  const handleEdit = (p) => {
     setForm({
-      name: product.name || "",
-      price: product.price || "",
-      description: product.description || "",
-      images: product.images || (product.imageUrl ? [product.imageUrl] : []),
-      facebookUrl: product.facebookUrl || SELLERS[0].url,
-      category: product.category || "Accessories",
+      name: p.name || "",
+      price: p.price || "",
+      description: p.description || "",
+      images: p.images || (p.imageUrl ? [p.imageUrl] : []),
+      facebookUrl: p.facebookUrl || SELLERS[0].url,
+      category: p.category || "Accessories",
+      brand: p.brand || "",
+      youtubeUrl: p.youtubeUrl || "",
     });
     setImageFiles([]);
-    setPreviewUrls(product.images?.length ? product.images : product.imageUrl ? [product.imageUrl] : []);
-    setEditingId(product.id);
+    setPreviewUrls(p.images?.length ? p.images : p.imageUrl ? [p.imageUrl] : []);
+    setEditingId(p.id);
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleDelete = async (id, name) => {
-    if (!window.confirm(`Delete "${name}"? This cannot be undone.`)) return;
+    if (!window.confirm(`Delete "${name}"?`)) return;
     try {
       await deleteDoc(doc(db, "products", id));
       await fetchProducts();
-    } catch (err) {
-      alert("Error deleting: " + err.message);
-    }
+    } catch (err) { alert("Error: " + err.message); }
   };
 
   const cancelForm = () => {
@@ -172,355 +194,407 @@ export default function AdminPage() {
     setShowForm(false);
   };
 
-  // Get seller label from URL
-  const getSellerLabel = (url) => {
-    const found = SELLERS.find((s) => s.url === url);
-    return found ? found.label : url;
-  };
+  const getSellerLabel = (url) => SELLERS.find((s) => s.url === url)?.label || url;
 
   if (!user) return null;
 
+  const filteredProducts = products.filter((p) =>
+    p.name?.toLowerCase().includes(adminSearch.toLowerCase())
+  );
+
+  /* ─── RENDER ─────────────────────────────────────────────── */
   return (
-    <div style={styles.page}>
-      {statusMessage && (
-        <div style={styles.statusPopup}>
-          {statusMessage}
-        </div>
-      )}
-      <div style={styles.header}>
+    <div style={s.page}>
+      {statusMessage && <div style={s.popup}>{statusMessage}</div>}
+
+      {/* ── Header ── */}
+      <div style={s.header}>
         <div>
-          <h1 style={styles.title}>Admin Dashboard</h1>
-          <p style={styles.sub}>Manage your products</p>
+          <h1 style={s.title}>Admin Dashboard</h1>
+          <p style={s.sub}>Logged in as {user.email}</p>
         </div>
-        {!showForm && (
-          <button onClick={() => setShowForm(true)} style={styles.addBtn}>
-            + Add Product
-          </button>
-        )}
+        <div style={s.headerRight}>
+          {!showForm && activeTab === "products" && (
+            <button onClick={() => setShowForm(true)} style={s.addBtn}>+ Add Product</button>
+          )}
+        </div>
       </div>
 
-      {/* Product Form */}
-      {showForm && (
-        <div style={styles.formCard}>
-          <h2 style={styles.formTitle}>
-            {editingId ? "Edit Product" : "New Product"}
-          </h2>
-          <form onSubmit={handleSubmit} style={styles.form}>
-            <div style={styles.row}>
-              <label style={styles.label}>Product Name *</label>
-              <input name="name" value={form.name} onChange={handleChange}
-                placeholder="e.g. GoPro Hero 12 Chest Mount" style={styles.input} required />
-            </div>
+      {/* ── Tabs ── */}
+      <div style={s.tabs}>
+        {["overview", "products"].map((t) => (
+          <button
+            key={t}
+            onClick={() => setActiveTab(t)}
+            style={{ ...s.tab, ...(activeTab === t ? s.tabActive : {}) }}
+          >
+            {t === "overview" ? "📊 Overview" : "📦 Products"}
+          </button>
+        ))}
+      </div>
 
-            <div style={styles.row2}>
-              <div style={styles.row}>
-                <label style={styles.label}>Price (₱) *</label>
-                <input name="price" type="number" value={form.price} onChange={handleChange}
-                  placeholder="e.g. 1500" style={styles.input} required />
-              </div>
-              <div style={styles.row}>
-                <label style={styles.label}>Category</label>
-                <select name="category" value={form.category} onChange={handleChange} style={styles.input}>
-                  {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-                </select>
-              </div>
-            </div>
+      {/* ════════════════════════════════════════════
+          TAB: OVERVIEW
+      ════════════════════════════════════════════ */}
+      {activeTab === "overview" && (
+        <div>
+          {/* Stat cards */}
+          <div style={s.statsGrid}>
+            <StatCard icon="📦" label="Total Products" value={totalProducts} />
+            <StatCard icon="👁️" label="Total Views" value={totalViews} />
+            <StatCard icon="🔥" label="Top Product" value={topProduct?.name || "—"} small />
+            <StatCard
+              icon="🏷️"
+              label="Categories"
+              value={Object.entries(categoryCounts)
+                .filter(([, v]) => v > 0)
+                .map(([k, v]) => `${k}: ${v}`)
+                .join(" · ") || "—"}
+              small
+            />
+          </div>
 
-            <div style={styles.row}>
-              <label style={styles.label}>Description</label>
-              <textarea name="description" value={form.description} onChange={handleChange}
-                placeholder="Short product description..." style={{ ...styles.input, height: 80, resize: "vertical" }} />
-            </div>
-
-            <div style={styles.row}>
-              <label style={styles.label}>Upload Images</label>
-              <input type="file" accept="image/*" multiple onChange={handleFileChange} style={styles.fileInput} />
-            </div>
-
-            {(previewUrls.length > 0 || form.images?.length > 0) && (
-              <div style={styles.imagePreviewGrid}>
-                {previewUrls.length > 0
-                  ? previewUrls.map((url, idx) => (
-                      <div key={idx} style={styles.previewWrapper}>
-                        <button type="button" onClick={() => removePreviewImage(idx)} style={styles.removePreviewBtn}>×</button>
-                        <img src={url} alt={`preview-${idx}`} style={styles.previewThumb} />
-                      </div>
-                    ))
-                  : form.images?.length > 0
-                  ? form.images.map((url, idx) => (
-                      <div key={idx} style={styles.previewWrapper}>
-                        <button type="button" onClick={() => removePreviewImage(idx)} style={styles.removePreviewBtn}>×</button>
-                        <img src={url} alt={`saved-${idx}`} style={styles.previewThumb} />
-                      </div>
-                    ))
-                  : null}
+          {/* Views leaderboard */}
+          <div style={s.card}>
+            <h2 style={s.cardTitle}>👁️ Product View Leaderboard</h2>
+            {fetchLoading ? <p style={{ color: "var(--text-muted)" }}>Loading...</p> : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {[...products]
+                  .sort((a, b) => (b.views || 0) - (a.views || 0))
+                  .slice(0, 10)
+                  .map((p, i) => (
+                    <div key={p.id} style={s.lbRow}>
+                      <span style={s.lbRank}>#{i + 1}</span>
+                      <img
+                        src={p.images?.[0] || p.imageUrl || "https://via.placeholder.com/40"}
+                        style={s.lbThumb}
+                        alt=""
+                        onError={(e) => e.target.src = "https://via.placeholder.com/40"}
+                      />
+                      <span style={{ flex: 1, fontSize: 14 }}>{p.name}</span>
+                      <span style={s.lbViews}>👁 {p.views || 0} views</span>
+                    </div>
+                  ))}
               </div>
             )}
-
-            {/* Seller Selector */}
-            <div style={styles.row}>
-              <label style={styles.label}>Assign Seller</label>
-              <select
-                name="facebookUrl"
-                value={form.facebookUrl}
-                onChange={handleChange}
-                style={styles.input}
-              >
-                {SELLERS.map((s) => (
-                  <option key={s.label} value={s.url}>{s.label}</option>
-                ))}
-              </select>
-            </div>
-
-            <div style={styles.btnRow}>
-              <button type="submit" style={styles.saveBtn} disabled={loading}>
-                {loading ? "Saving..." : editingId ? "Update Product" : "Publish Product"}
-              </button>
-              <button type="button" onClick={cancelForm} style={styles.cancelBtn}>
-                Cancel
-              </button>
-            </div>
-          </form>
+          </div>
         </div>
       )}
 
-      {/* Products Table */}
-      <div style={styles.tableWrap}>
-        <input
-          type="text"
-          placeholder="Search products..."
-          value={adminSearch}
-          onChange={(e) => setAdminSearch(e.target.value)}
-          style={styles.search}
-        />
-        <h2 style={styles.sectionTitle}>All Products ({products.length})</h2>
+      {/* ════════════════════════════════════════════
+          TAB: PRODUCTS
+      ════════════════════════════════════════════ */}
+      {activeTab === "products" && (
+        <div>
+          {/* ── Product Form ── */}
+          {showForm && (
+            <div style={s.formCard}>
+              <h2 style={s.formTitle}>{editingId ? "✏️ Edit Product" : "➕ New Product"}</h2>
+              <form onSubmit={handleSubmit} style={s.form}>
 
-        {fetchLoading ? (
-          <p style={{ color: "#666" }}>Loading...</p>
-        ) : products.length === 0 ? (
-          <p style={{ color: "#555" }}>No products yet. Click "Add Product" to start.</p>
-        ) : (
-          <div style={styles.productList}>
-            {products
-              .filter((p) =>
-                p.name?.toLowerCase().includes(adminSearch.toLowerCase())
-              )
-              .map((p) => (
-                <div key={p.id} style={styles.productRow}>
-                  <img
-                    src={(p.images?.[0] || p.imageUrl) || "https://via.placeholder.com/60x60?text=?"}
-                    alt={p.name}
-                    style={styles.thumb}
-                    onError={(e) => e.target.src = "https://via.placeholder.com/60x60?text=?"}
-                  />
-                  <div style={styles.productInfo}>
-                    <span style={styles.productName}>{p.name}</span>
-                    <span style={styles.productMeta}>
-                      {p.category} · ₱{Number(p.price).toLocaleString()}
-                    </span>
-                    {p.facebookUrl && (
-                      <span style={styles.sellerTag}>
-                        👤 Seller: {getSellerLabel(p.facebookUrl)}
-                      </span>
-                    )}
-                  </div>
-                  <div style={styles.actions}>
-                    <button onClick={() => handleEdit(p)} style={styles.editBtn}>Edit</button>
-                    <button onClick={() => handleDelete(p.id, p.name)} style={styles.deleteBtn}>Delete</button>
-                  </div>
+                {/* Name */}
+                <Field label="Product Name *">
+                  <input name="name" value={form.name} onChange={handleChange}
+                    placeholder="e.g. GoPro Hero 12 Chest Mount" style={s.input} required />
+                </Field>
+
+                {/* Price + Category */}
+                <div style={s.row2}>
+                  <Field label="Price (₱) *">
+                    <input name="price" type="number" value={form.price} onChange={handleChange}
+                      placeholder="e.g. 1500" style={s.input} required />
+                  </Field>
+                  <Field label="Category">
+                    <select name="category" value={form.category} onChange={handleChange} style={s.input}>
+                      {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+                    </select>
+                  </Field>
                 </div>
-              ))}
+
+                {/* Brand (dynamic by category) */}
+                <Field label={`Brand / Unit (${form.category})`}>
+                  <select name="brand" value={form.brand} onChange={handleChange} style={s.input}>
+                    <option value="">— Select brand —</option>
+                    {(BRANDS_BY_CATEGORY[form.category] || []).map((b) => (
+                      <option key={b}>{b}</option>
+                    ))}
+                  </select>
+                </Field>
+
+                {/* Description */}
+                <Field label="Description">
+                  <textarea name="description" value={form.description} onChange={handleChange}
+                    placeholder="Short product description..." style={{ ...s.input, height: 80, resize: "vertical" }} />
+                </Field>
+
+                {/* YouTube URL */}
+                <Field label="YouTube Video URL (optional)">
+                  <input name="youtubeUrl" value={form.youtubeUrl} onChange={handleChange}
+                    placeholder="https://www.youtube.com/watch?v=..." style={s.input} />
+                  {getYouTubeId(form.youtubeUrl) && (
+                    <div style={s.ytPreviewWrap}>
+                      <iframe
+                        src={`https://www.youtube.com/embed/${getYouTubeId(form.youtubeUrl)}`}
+                        title="YouTube preview"
+                        style={s.ytFrame}
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    </div>
+                  )}
+                </Field>
+
+                {/* Images */}
+                <Field label="Upload Images">
+                  <input type="file" accept="image/*" multiple onChange={handleFileChange} style={s.fileInput} />
+                </Field>
+
+                {(previewUrls.length > 0 || form.images?.length > 0) && (
+                  <div style={s.imageGrid}>
+                    {(previewUrls.length > 0 ? previewUrls : form.images || []).map((url, idx) => (
+                      <div key={idx} style={s.previewWrap}>
+                        <button type="button" onClick={() => removePreviewImage(idx)} style={s.removeBtn}>×</button>
+                        <img src={url} alt="" style={s.previewThumb} />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Seller */}
+                <Field label="Assign Seller">
+                  <select name="facebookUrl" value={form.facebookUrl} onChange={handleChange} style={s.input}>
+                    {SELLERS.map((sel) => (
+                      <option key={sel.label} value={sel.url}>{sel.label}</option>
+                    ))}
+                  </select>
+                </Field>
+
+                <div style={s.btnRow}>
+                  <button type="submit" style={s.saveBtn} disabled={loading}>
+                    {loading ? "Saving…" : editingId ? "Update Product" : "Publish Product"}
+                  </button>
+                  <button type="button" onClick={cancelForm} style={s.cancelBtn}>Cancel</button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* ── Product List ── */}
+          <div style={s.card}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+              <input
+                type="text"
+                placeholder="Search products…"
+                value={adminSearch}
+                onChange={(e) => setAdminSearch(e.target.value)}
+                style={{ ...s.input, flex: 1, minWidth: 180, marginBottom: 0 }}
+              />
+              <span style={{ color: "var(--text-muted)", fontSize: 13 }}>
+                {filteredProducts.length} of {totalProducts} products
+              </span>
+            </div>
+
+            {fetchLoading ? (
+              <p style={{ color: "var(--text-muted)" }}>Loading…</p>
+            ) : filteredProducts.length === 0 ? (
+              <p style={{ color: "var(--text-muted)" }}>No products found.</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {filteredProducts.map((p) => (
+                  <div key={p.id} style={s.productRow}>
+                    <img
+                      src={p.images?.[0] || p.imageUrl || "https://via.placeholder.com/60"}
+                      alt={p.name}
+                      style={s.thumb}
+                      onError={(e) => e.target.src = "https://via.placeholder.com/60"}
+                    />
+                    <div style={s.productInfo}>
+                      <span style={s.productName}>{p.name}</span>
+                      <span style={s.productMeta}>
+                        {p.category}{p.brand ? ` · ${p.brand}` : ""} · ₱{Number(p.price).toLocaleString()}
+                      </span>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 2 }}>
+                        {p.facebookUrl && (
+                          <span style={s.sellerTag}>👤 {getSellerLabel(p.facebookUrl)}</span>
+                        )}
+                        {p.youtubeUrl && (
+                          <span style={s.ytTag}>▶️ YouTube</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 👁 View count beside Edit */}
+                    <div style={s.viewBadge}>
+                      <span style={s.viewIcon}>👁</span>
+                      <span style={s.viewCount}>{p.views || 0}</span>
+                    </div>
+
+                    <div style={s.actions}>
+                      <button onClick={() => handleEdit(p)} style={s.editBtn}>Edit</button>
+                      <button onClick={() => handleDelete(p.id, p.name)} style={s.deleteBtn}>Delete</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Small helpers ─────────────────────────────────────── */
+function Field({ label, children }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <label style={{ fontSize: 13, color: "var(--text-muted)", fontWeight: 500 }}>{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function StatCard({ icon, label, value, small }) {
+  return (
+    <div style={sc.card}>
+      <span style={sc.icon}>{icon}</span>
+      <div>
+        <p style={sc.label}>{label}</p>
+        <p style={{ ...sc.value, fontSize: small ? 13 : 22 }}>{value}</p>
       </div>
     </div>
   );
 }
 
-const styles = {
+/* ─── Styles ─────────────────────────────────────────────── */
+const s = {
   page: {
     minHeight: "100vh",
-    background: "#111",
-    color: "#f0f0f0",
+    background: "var(--bg)",
+    color: "var(--text)",
     fontFamily: "sans-serif",
     padding: "24px",
-    maxWidth: 900,
+    maxWidth: 960,
     margin: "0 auto",
   },
-  search: {
-    width: "100%",
-    padding: "10px 12px",
-    marginBottom: 16,
-    borderRadius: 8,
-    border: "1px solid #333",
-    background: "#111",
-    color: "#fff",
-  },
-  statusPopup: {
-    position: "fixed",
-    top: "20px",
-    left: "50%",
-    transform: "translateX(-50%)",
-    background: "#d4ed00",
-    color: "#111",
-    padding: "12px 24px",
-    borderRadius: "10px",
-    fontWeight: "bold",
-    zIndex: 9999,
+  popup: {
+    position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)",
+    background: "var(--accent)", color: "var(--accent-text)",
+    padding: "12px 24px", borderRadius: 10, fontWeight: "bold", zIndex: 9999,
   },
   header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 24,
+    display: "flex", justifyContent: "space-between",
+    alignItems: "flex-start", marginBottom: 20,
   },
-  title: { margin: 0, color: "#d4ed00", fontSize: 24 },
-  sub: { margin: "4px 0 0", color: "#666", fontSize: 13 },
+  headerRight: { display: "flex", gap: 10 },
+  title: { margin: 0, color: "var(--accent)", fontSize: 24 },
+  sub: { margin: "4px 0 0", color: "var(--text-muted)", fontSize: 13 },
   addBtn: {
-    background: "#d4ed00",
-    color: "#111",
-    border: "none",
-    borderRadius: 8,
-    padding: "10px 20px",
-    fontWeight: 700,
-    fontSize: 14,
-    cursor: "pointer",
+    background: "var(--accent)", color: "var(--accent-text)",
+    border: "none", borderRadius: 8, padding: "10px 20px",
+    fontWeight: 700, fontSize: 14, cursor: "pointer",
   },
+  tabs: { display: "flex", gap: 8, marginBottom: 20 },
+  tab: {
+    padding: "8px 18px", borderRadius: 8, border: "1px solid var(--border-light)",
+    background: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 14, fontWeight: 500,
+  },
+  tabActive: {
+    background: "var(--accent)", color: "var(--accent-text)",
+    border: "1px solid var(--accent)", fontWeight: 700,
+  },
+  statsGrid: {
+    display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+    gap: 14, marginBottom: 20,
+  },
+  card: {
+    background: "var(--bg-card)", border: "1px solid var(--border)",
+    borderRadius: 14, padding: 20, marginBottom: 20,
+  },
+  cardTitle: { color: "var(--text)", fontSize: 16, marginBottom: 16 },
+  lbRow: {
+    display: "flex", alignItems: "center", gap: 10,
+    padding: "8px 0", borderBottom: "1px solid var(--border)",
+  },
+  lbRank: { color: "var(--accent)", fontWeight: 700, width: 28, fontSize: 14 },
+  lbThumb: { width: 36, height: 36, borderRadius: 6, objectFit: "cover", flexShrink: 0 },
+  lbViews: { color: "var(--accent)", fontWeight: 600, fontSize: 13, whiteSpace: "nowrap" },
   formCard: {
-    background: "#1a1a1a",
-    border: "1px solid #2a2a2a",
-    borderRadius: 14,
-    padding: 24,
-    marginBottom: 32,
+    background: "var(--bg-card)", border: "1px solid var(--border)",
+    borderRadius: 14, padding: 24, marginBottom: 24,
   },
-  formTitle: { margin: "0 0 20px", color: "#fff", fontSize: 18 },
+  formTitle: { margin: "0 0 20px", color: "var(--text)", fontSize: 18 },
   form: { display: "flex", flexDirection: "column", gap: 16 },
-  row: { display: "flex", flexDirection: "column", gap: 6 },
   row2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 },
-  label: { fontSize: 13, color: "#aaa", fontWeight: 500 },
   input: {
-    padding: "10px 12px",
-    background: "#111",
-    border: "1px solid #333",
-    borderRadius: 8,
-    color: "#fff",
-    fontSize: 14,
-    outline: "none",
-    width: "100%",
-    boxSizing: "border-box",
-    fontFamily: "sans-serif",
+    padding: "10px 12px", background: "var(--bg-input)", border: "1px solid var(--border-light)",
+    borderRadius: 8, color: "var(--text)", fontSize: 14, outline: "none",
+    width: "100%", boxSizing: "border-box", fontFamily: "sans-serif",
   },
   fileInput: {
-    width: "100%",
-    padding: "10px 12px",
-    background: "#111",
-    border: "1px solid #333",
-    borderRadius: 8,
-    color: "#fff",
-    fontSize: 14,
-    outline: "none",
-    boxSizing: "border-box",
-    fontFamily: "sans-serif",
+    width: "100%", padding: "10px 12px", background: "var(--bg-input)",
+    border: "1px solid var(--border-light)", borderRadius: 8,
+    color: "var(--text)", fontSize: 14, boxSizing: "border-box",
   },
-  imagePreviewGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(80px, 1fr))",
-    gap: 10,
-    marginTop: 10,
+  ytPreviewWrap: { marginTop: 10, borderRadius: 10, overflow: "hidden" },
+  ytFrame: { width: "100%", height: 220, border: "none", display: "block" },
+  imageGrid: {
+    display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(80px, 1fr))",
+    gap: 10, marginTop: 10,
   },
-  previewWrapper: {
-    position: "relative",
-    borderRadius: 8,
-    overflow: "hidden",
-    background: "#111",
-  },
-  previewThumb: {
-    width: "100%",
-    height: 100,
-    objectFit: "cover",
-    display: "block",
-  },
-  removePreviewBtn: {
-    position: "absolute",
-    top: 6,
-    right: 6,
-    zIndex: 2,
-    width: 24,
-    height: 24,
-    borderRadius: "50%",
-    border: "none",
-    background: "rgba(0,0,0,0.7)",
-    color: "#fff",
-    fontSize: 16,
-    lineHeight: 1,
-    cursor: "pointer",
+  previewWrap: { position: "relative", borderRadius: 8, overflow: "hidden" },
+  previewThumb: { width: "100%", height: 100, objectFit: "cover", display: "block" },
+  removeBtn: {
+    position: "absolute", top: 6, right: 6, zIndex: 2,
+    width: 24, height: 24, borderRadius: "50%", border: "none",
+    background: "rgba(0,0,0,0.7)", color: "#fff", fontSize: 16,
+    lineHeight: 1, cursor: "pointer",
   },
   btnRow: { display: "flex", gap: 12, paddingTop: 4 },
   saveBtn: {
-    background: "#d4ed00",
-    color: "#111",
-    border: "none",
-    borderRadius: 8,
-    padding: "11px 24px",
-    fontWeight: 700,
-    fontSize: 14,
-    cursor: "pointer",
-    flex: 1,
+    background: "var(--accent)", color: "var(--accent-text)", border: "none",
+    borderRadius: 8, padding: "11px 24px", fontWeight: 700, fontSize: 14,
+    cursor: "pointer", flex: 1,
   },
   cancelBtn: {
-    background: "none",
-    border: "1px solid #444",
-    color: "#888",
-    borderRadius: 8,
-    padding: "11px 24px",
-    cursor: "pointer",
-    fontSize: 14,
+    background: "none", border: "1px solid var(--border-light)", color: "var(--text-muted)",
+    borderRadius: 8, padding: "11px 24px", cursor: "pointer", fontSize: 14,
   },
-  tableWrap: { marginTop: 8 },
-  sectionTitle: { color: "#fff", fontSize: 16, marginBottom: 16 },
-  productList: { display: "flex", flexDirection: "column", gap: 10 },
   productRow: {
-    background: "#1a1a1a",
-    border: "1px solid #2a2a2a",
-    borderRadius: 10,
-    padding: "12px 16px",
-    display: "flex",
-    alignItems: "center",
-    gap: 14,
+    background: "var(--bg-card)", border: "1px solid var(--border)",
+    borderRadius: 10, padding: "12px 16px", display: "flex",
+    alignItems: "center", gap: 14,
   },
-  thumb: {
-    width: 60, height: 60,
-    borderRadius: 8,
-    objectFit: "cover",
-    background: "#111",
-    flexShrink: 0,
+  thumb: { width: 60, height: 60, borderRadius: 8, objectFit: "cover", flexShrink: 0 },
+  productInfo: { flex: 1, display: "flex", flexDirection: "column", gap: 3 },
+  productName: { fontWeight: 600, fontSize: 15, color: "var(--text)" },
+  productMeta: { fontSize: 13, color: "var(--text-muted)" },
+  sellerTag: { fontSize: 12, color: "var(--accent)" },
+  ytTag: { fontSize: 12, color: "#f00", background: "rgba(255,0,0,0.08)", padding: "1px 6px", borderRadius: 4 },
+  viewBadge: {
+    display: "flex", flexDirection: "column", alignItems: "center",
+    background: "var(--bg-input)", border: "1px solid var(--border-light)",
+    borderRadius: 8, padding: "6px 12px", minWidth: 58,
   },
-  productInfo: {
-    flex: 1,
-    display: "flex",
-    flexDirection: "column",
-    gap: 3,
-  },
-  productName: { fontWeight: 600, fontSize: 15 },
-  productMeta: { fontSize: 13, color: "#888" },
-  sellerTag: { fontSize: 12, color: "#d4ed00" },
+  viewIcon: { fontSize: 14 },
+  viewCount: { fontSize: 14, fontWeight: 700, color: "var(--accent)" },
   actions: { display: "flex", gap: 8 },
   editBtn: {
-    background: "none",
-    border: "1px solid #444",
-    color: "#ccc",
-    borderRadius: 6,
-    padding: "6px 14px",
-    cursor: "pointer",
-    fontSize: 13,
+    background: "none", border: "1px solid var(--border-light)", color: "var(--text-muted)",
+    borderRadius: 6, padding: "6px 14px", cursor: "pointer", fontSize: 13,
   },
   deleteBtn: {
-    background: "none",
-    border: "1px solid #6b2222",
-    color: "#ff6b6b",
-    borderRadius: 6,
-    padding: "6px 14px",
-    cursor: "pointer",
-    fontSize: 13,
+    background: "none", border: "1px solid var(--danger-border)", color: "var(--danger)",
+    borderRadius: 6, padding: "6px 14px", cursor: "pointer", fontSize: 13,
   },
+};
+
+const sc = {
+  card: {
+    background: "var(--bg-card)", border: "1px solid var(--border)",
+    borderRadius: 12, padding: 18, display: "flex", gap: 14, alignItems: "center",
+  },
+  icon: { fontSize: 28 },
+  label: { fontSize: 12, color: "var(--text-muted)", marginBottom: 4 },
+  value: { fontWeight: 700, color: "var(--accent)", lineHeight: 1.2 },
 };
