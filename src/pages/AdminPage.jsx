@@ -29,7 +29,7 @@ const SELLERS = [
 const EMPTY_FORM = {
   name: "", price: "", description: "",
   images: [], facebookUrl: SELLERS[0].url,
-  category: "Accessories", brand: "",
+  category: "Accessories", brands: [],
   youtubeUrl: "",
   rating: 0,
 };
@@ -171,9 +171,20 @@ export default function AdminPage() {
     const { name, value } = e.target;
     setForm((cur) => {
       const next = { ...cur, [name]: value };
-      // reset brand when category changes
-      if (name === "category") next.brand = "";
+      // reset brands when category changes
+      if (name === "category") next.brands = [];
       return next;
+    });
+  };
+
+  const handleBrandToggle = (brand) => {
+    setForm((cur) => {
+      const currentBrands = cur.brands || [];
+      if (currentBrands.includes(brand)) {
+        return { ...cur, brands: currentBrands.filter(b => b !== brand) };
+      } else {
+        return { ...cur, brands: [...currentBrands, brand] };
+      }
     });
   };
 
@@ -216,7 +227,8 @@ export default function AdminPage() {
         imageUrl: finalImageUrls[0] || "",
         price: Number(form.price),
         youtubeUrl: form.youtubeUrl || "",
-        brand: form.brand || "",
+        brands: form.brands || [],
+        brand: (form.brands || []).join(", "), // Keep backward compatibility
         rating: Math.max(0, Math.min(5, Number(form.rating || 0))),
       };
 
@@ -248,7 +260,7 @@ export default function AdminPage() {
       images: p.images || (p.imageUrl ? [p.imageUrl] : []),
       facebookUrl: p.facebookUrl || SELLERS[0].url,
       category: p.category || "Accessories",
-      brand: p.brand || "",
+      brands: p.brands || (p.brand ? p.brand.split(", ").filter(b => b.trim()) : []),
       youtubeUrl: p.youtubeUrl || "",
       rating: typeof p.rating === "number" ? p.rating : 0,
     });
@@ -405,14 +417,30 @@ export default function AdminPage() {
                   </Field>
                 </div>
 
-                {/* Brand (dynamic by category) */}
-                <Field label={`Brand / Unit (${form.category})`}>
-                  <select name="brand" value={form.brand} onChange={handleChange} style={s.input}>
-                    <option value="">— Select brand —</option>
-                    {((shopOptions.brandsByCategory || {})[form.category] || BRANDS_BY_CATEGORY[form.category] || []).map((b) => (
-                      <option key={b}>{b}</option>
-                    ))}
-                  </select>
+                {/* Brands/Units (dynamic by category) */}
+                <Field label={`Brands / Units (${form.category})`}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      {((shopOptions.brandsByCategory || {})[form.category] || BRANDS_BY_CATEGORY[form.category] || []).map((b) => (
+                        <button
+                          key={b}
+                          type="button"
+                          onClick={() => handleBrandToggle(b)}
+                          style={{
+                            ...s.brandChip,
+                            ...(form.brands?.includes(b) ? s.brandChipSelected : s.brandChipUnselected)
+                          }}
+                        >
+                          {b}
+                        </button>
+                      ))}
+                    </div>
+                    {form.brands?.length > 0 && (
+                      <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
+                        Selected: {form.brands.join(", ")}
+                      </div>
+                    )}
+                  </div>
                 </Field>
 
                 {/* Rating (admin-only) */}
@@ -884,6 +912,17 @@ const s = {
   deleteBtn: {
     background: "none", border: "1px solid var(--danger-border)", color: "var(--danger)",
     borderRadius: 6, padding: "6px 14px", cursor: "pointer", fontSize: 13,
+  },
+  brandChip: {
+    padding: "6px 12px", borderRadius: 16, border: "1px solid var(--border-light)",
+    fontSize: 12, fontWeight: 500, cursor: "pointer", transition: "all 0.2s ease",
+    fontFamily: "sans-serif",
+  },
+  brandChipUnselected: {
+    background: "var(--bg-input)", color: "var(--text-muted)",
+  },
+  brandChipSelected: {
+    background: "var(--accent)", color: "var(--accent-text)", borderColor: "var(--accent)",
   },
 };
 

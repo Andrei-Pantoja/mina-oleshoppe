@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useCart } from "../context/CartContext";
 
@@ -27,7 +27,7 @@ export default function ProductCard({ product, onClick }) {
   const description = product?.description || "";
   const facebookUrl = product?.facebookUrl || "";
   const category = product?.category || "";
-  const brand = product?.brand || "";
+  const brands = product?.brands || (product?.brand ? product.brand.split(", ").filter(b => b.trim()) : []);
   const rating = product?.rating || 0;
 
   const images = product?.images?.length > 0
@@ -35,17 +35,37 @@ export default function ProductCard({ product, onClick }) {
     : product?.imageUrl ? [product.imageUrl] : [];
 
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [isAutoPlaying, setIsAutoPlaying] = useState(true);
   const currentImage = images[currentIndex] || "https://via.placeholder.com/400x300?text=No+Image";
+
+  // Auto-play functionality
+  useEffect(() => {
+    if (!isAutoPlaying || images.length <= 1) return;
+    
+    const interval = setInterval(() => {
+      setCurrentIndex((prev) => (prev + 1) % images.length);
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [isAutoPlaying, images.length]);
 
   const goPrev = (e) => {
     e.stopPropagation();
     if (!images.length) return;
+    setIsAutoPlaying(false);
     setCurrentIndex((p) => (p - 1 + images.length) % images.length);
   };
   const goNext = (e) => {
     e.stopPropagation();
     if (!images.length) return;
+    setIsAutoPlaying(false);
     setCurrentIndex((p) => (p + 1) % images.length);
+  };
+
+  const handleDotClick = (e, index) => {
+    e.stopPropagation();
+    setIsAutoPlaying(false);
+    setCurrentIndex(index);
   };
 
   const inCartQty = getQuantity(product?.id);
@@ -60,20 +80,40 @@ export default function ProductCard({ product, onClick }) {
     >
       {/* Image */}
       <div style={styles.imageWrap}>
-        <img src={currentImage} alt={name} style={styles.image}
-          onError={(e) => { e.target.src = "https://via.placeholder.com/400x300?text=No+Image"; }} />
+        <motion.img 
+          src={currentImage} 
+          alt={name} 
+          style={styles.image}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3, ease: "easeInOut" }}
+          key={currentImage}
+          onError={(e) => { e.target.src = "https://via.placeholder.com/400x300?text=No+Image" }} 
+        />
 
-        {(category || (brand && brand !== "Other")) && (
+        {(category || brands.length > 0) && (
           <span style={styles.badge}>
             {category || "—"}
-            {brand && brand !== "Other" ? ` · ${brand}` : ""}
+            {brands.length > 0 ? ` • ${brands.join(" / ")}` : ""}
           </span>
         )}
 
         {images.length > 1 && (
           <>
-            <button type="button" onClick={goPrev} style={{ ...styles.slideBtn, left: 10 }}>‹</button>
-            <button type="button" onClick={goNext} style={{ ...styles.slideBtn, right: 10 }}>›</button>
+            <button 
+              type="button" 
+              onClick={goPrev} 
+              style={{ ...styles.slideBtn, left: 10 }}
+              onMouseEnter={() => setIsAutoPlaying(false)}
+              onMouseLeave={() => setIsAutoPlaying(true)}
+            >‹</button>
+            <button 
+              type="button" 
+              onClick={goNext} 
+              style={{ ...styles.slideBtn, right: 10 }}
+              onMouseEnter={() => setIsAutoPlaying(false)}
+              onMouseLeave={() => setIsAutoPlaying(true)}
+            >›</button>
           </>
         )}
       </div>
@@ -82,9 +122,12 @@ export default function ProductCard({ product, onClick }) {
       {images.length > 1 && (
         <div style={styles.dots}>
           {images.map((_, idx) => (
-            <span key={idx}
-              onClick={(e) => { e.stopPropagation(); setCurrentIndex(idx); }}
+            <motion.span 
+              key={idx}
+              onClick={(e) => handleDotClick(e, idx)} 
               style={idx === currentIndex ? styles.dotActive : styles.dot}
+              whileHover={{ scale: 1.2 }}
+              whileTap={{ scale: 0.9 }}
             />
           ))}
         </div>

@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useCart } from "../context/CartContext";
+import { motion } from "framer-motion";
 
 const capitalizeFirst = (str) => {
   if (!str) return str;
@@ -34,18 +35,43 @@ export default function ProductModal({ product, onClose }) {
     : [];
 
   const [imgIndex, setImgIndex] = useState(0);
+  const [isAutoPlaying, setIsAutoPlaying] = useState(true);
   const [qty, setQty] = useState(1);
   const [showInquiry, setShowInquiry] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const nextImage = () => setImgIndex((p) => (p + 1) % images.length);
-  const prevImage = () => setImgIndex((p) => (p - 1 + images.length) % images.length);
+  // Auto-play functionality
+  useEffect(() => {
+    if (!isAutoPlaying || images.length <= 1) return;
+    
+    const interval = setInterval(() => {
+      setImgIndex((prev) => (prev + 1) % images.length);
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [isAutoPlaying, images.length]);
+
+  const nextImage = () => {
+    setIsAutoPlaying(false);
+    setImgIndex((p) => (p + 1) % images.length);
+  };
+  const prevImage = () => {
+    setIsAutoPlaying(false);
+    setImgIndex((p) => (p - 1 + images.length) % images.length);
+  };
+
+  const handleDotClick = (e, index) => {
+    e.stopPropagation();
+    setIsAutoPlaying(false);
+    setImgIndex(index);
+  };
 
   const inCartQty = getQuantity(product?.id);
   const inCart = inCartQty > 0;
   const youtubeId = getYouTubeId(product.youtubeUrl);
-  const showBrand = product?.brand && product.brand !== "Other";
-  const showMeta = product?.category || showBrand;
+  const brands = product?.brands || (product?.brand ? product.brand.split(", ").filter(b => b.trim()) : []);
+  const showBrands = brands.length > 0;
+  const showMeta = product?.category || showBrands;
 
   /* ── Build single-item inquiry message ────────────── */
   const buildInquiryMessage = () =>
@@ -106,25 +132,41 @@ export default function ProductModal({ product, onClose }) {
 
           {/* Image carousel */}
           <div style={styles.imageWrapper}>
-            <img
+            <motion.img
               src={images[imgIndex] || "https://via.placeholder.com/400x300?text=No+Image"}
               alt={product.name}
               style={styles.image}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.3, ease: "easeInOut" }}
+              key={images[imgIndex]}
             />
             {images.length > 1 && (
               <>
-                <button onClick={prevImage} style={styles.arrowLeft}>‹</button>
-                <button onClick={nextImage} style={styles.arrowRight}>›</button>
+                <button 
+                  onClick={prevImage} 
+                  style={styles.arrowLeft}
+                  onMouseEnter={() => setIsAutoPlaying(false)}
+                  onMouseLeave={() => setIsAutoPlaying(true)}
+                >‹</button>
+                <button 
+                  onClick={nextImage} 
+                  style={styles.arrowRight}
+                  onMouseEnter={() => setIsAutoPlaying(false)}
+                  onMouseLeave={() => setIsAutoPlaying(true)}
+                >›</button>
               </>
             )}
             {/* Dot indicators */}
             {images.length > 1 && (
               <div style={styles.dots}>
                 {images.map((_, i) => (
-                  <span
+                  <motion.span
                     key={i}
-                    onClick={(e) => { e.stopPropagation(); setImgIndex(i); }}
+                    onClick={(e) => handleDotClick(e, i)}
                     style={i === imgIndex ? styles.dotActive : styles.dot}
+                    whileHover={{ scale: 1.2 }}
+                    whileTap={{ scale: 0.9 }}
                   />
                 ))}
               </div>
@@ -138,7 +180,7 @@ export default function ProductModal({ product, onClose }) {
               {showMeta && (
                 <span style={styles.metaBadge}>
                   {product.category || "—"}
-                  {showBrand ? ` · ${product.brand}` : ""}
+                  {showBrands ? ` • ${brands.join(" / ")}` : ""}
                 </span>
               )}
               <Stars rating={product?.rating || 0} />
