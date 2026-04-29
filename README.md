@@ -5,7 +5,7 @@ A simple e-commerce website built to showcase and manage products in an online s
 Live Demo
 
 Check it out here:
-https://andrei-pantoja.github.io/mina-oleshoppe/
+https://mina-oleshoppe.vercel.app/
 
 Features:
 Product listing with categories
