@@ -7,6 +7,7 @@ import { motion } from "framer-motion";
 import CartDrawer from "../components/CartDrawer";
 import { useCart } from "../context/CartContext";
 import { DEFAULT_BRANDS_BY_CATEGORY, DEFAULT_CATEGORIES, getShopOptions } from "../utils/shopOptions";
+import { useSearchParams } from "react-router-dom";
 
 import store1 from "../assets/store1.png";
 import store2 from "../assets/store2.png";
@@ -29,6 +30,7 @@ function getMostCommonSellerUrl(cartItems) {
 
 export default function StorePage() {
   const isMobile = window.innerWidth < 768;
+  const [searchParams] = useSearchParams();
 
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -46,11 +48,21 @@ export default function StorePage() {
 
   const { cart } = useCart();
 
+  // Get author from URL parameter for multi-seller view
+  const urlAuthor = searchParams.get('author');
+  
+  // Debug logging
+  console.log('URL Author parameter:', urlAuthor);
+
   useEffect(() => {
     const fetchProducts = async () => {
       try {
         const snap = await getDocs(collection(db, "products"));
-        setProducts(snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((p) => !p?.isConfig));
+        const allProducts = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((p) => !p?.isConfig);
+        setProducts(allProducts);
+        
+        // Debug: Log all products and their authors
+        console.log('All products:', allProducts.map(p => ({ id: p.id, name: p.name, author: p.author })));
       } catch (err) {
         console.error(err);
       } finally {
@@ -139,15 +151,32 @@ export default function StorePage() {
     .filter((p) => {
       if (!p) return false;
       const matchCat = activeCategory === "All" || p.category === activeCategory;
-      const matchBrand = activeBrands.length === 0 || activeBrands.includes(p.brand);
+      // Check both brands array and brand string for backward compatibility
+      const productBrands = Array.isArray(p.brands) ? p.brands : (p.brand ? p.brand.split(", ").map(b => b.trim()).filter(b => b) : []);
+      const matchBrand = activeBrands.length === 0 || activeBrands.some(brand => productBrands.includes(brand));
       const matchSearch = (p.name || "").toLowerCase().includes(search.toLowerCase());
-      return matchCat && matchBrand && matchSearch;
+      // Filter by author if URL parameter is present
+      const matchAuthor = !urlAuthor ? true : (p.author && p.author.toLowerCase() === urlAuthor.toLowerCase());
+      
+      // Debug logging
+      if (urlAuthor) {
+        console.log('Filtering for author:', urlAuthor, 'Product author:', p.author, 'Match:', matchAuthor);
+        console.log('Product details:', { name: p.name, author: p.author, hasAuthor: !!p.author, authorType: typeof p.author });
+      }
+      
+      return matchCat && matchBrand && matchSearch && matchAuthor;
     })
     .sort((a, b) => {
       if (sortOption === "Price Low → High") return Number(a.price || 0) - Number(b.price || 0);
       if (sortOption === "Price High → Low") return Number(b.price || 0) - Number(a.price || 0);
       return 0;
     });
+
+  // Debug: Log final filtered results
+  if (urlAuthor) {
+    console.log('Final filtered products for author', urlAuthor, ':', filtered.map(p => ({ name: p.name, author: p.author })));
+    console.log('Total filtered count:', filtered.length);
+  }
 
   /* ── Checkout / inquiry ─────────────────────────────── */
   const handleCheckout = () => {
@@ -178,8 +207,17 @@ export default function StorePage() {
       )}
       {/* Hero */}
       <div style={styles.hero}>
-        <h1 style={styles.heroTitle}>🎥 Action Camera Accessories</h1>
-        <p style={styles.heroSub}>GoPro · Insta360 · Motorcycle Mounts & More</p>
+        <h1 style={styles.heroTitle}>
+          {urlAuthor ? `${urlAuthor.charAt(0).toUpperCase() + urlAuthor.slice(1)}'s Store` : '🎥 Action Camera Accessories'}
+        </h1>
+        <p style={styles.heroSub}>
+          {urlAuthor ? `Products by ${urlAuthor}` : 'GoPro · Insta360 · Motorcycle Mounts & More'}
+        </p>
+        {urlAuthor && (
+          <div style={styles.authorIndicator}>
+            Viewing store for: <strong>{urlAuthor}</strong>
+          </div>
+        )}
       </div>
 
       {/* Top bar */}
@@ -414,6 +452,16 @@ const styles = {
   hero: { padding: 40, textAlign: "center", borderBottom: "2px solid var(--accent)" },
   heroTitle: { color: "var(--accent)", fontSize: 28, fontWeight: 800 },
   heroSub: { color: "var(--text-muted)", marginTop: 8 },
+  authorIndicator: {
+    marginTop: 12,
+    padding: "8px 16px",
+    background: "rgba(255,255,255,0.1)",
+    border: "1px solid var(--accent)",
+    borderRadius: 20,
+    color: "var(--text)",
+    fontSize: 14,
+    display: "inline-block",
+  },
   topBar: { display: "flex", gap: 12, padding: 20, maxWidth: 1200, margin: "auto" },
   search: {
     flex: 1, padding: 14, borderRadius: 999,

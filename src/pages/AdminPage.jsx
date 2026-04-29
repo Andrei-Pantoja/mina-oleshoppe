@@ -20,18 +20,34 @@ const CATEGORIES = DEFAULT_CATEGORIES;
 
 const BRANDS_BY_CATEGORY = DEFAULT_BRANDS_BY_CATEGORY;
 
+// Admin configuration - map UIDs to admin details
+const ADMIN_CONFIG = {
+  "TX99yIEmAqWsfPBnkQHGBLJbgXi2": {
+    name: "mina",
+    label: "Mina",
+    sellerUrl: "https://m.me/mina080808",
+    email: "moninapantoja73@gmail.com"
+  },
+  "aOulrfPmz8XJ6YuLNeZsUur0Q7w1": {
+    name: "saira", 
+    label: "Saira",
+    sellerUrl: "https://m.me/saira",
+    email: "zyraaaaaa27@gmail.com"
+  }
+};
+
 const SELLERS = [
-  { label: "Sithis", url: "https://m.me/Sithis02" },
-  { label: "Saira", url: "https://m.me/sairachandesu2003" },
-  { label: "Drei", url: "https://m.me/Dreiu00" },
+  { label: "Mina", url: "https://m.me/mina080808" },
+  { label: "Saira", url: "https://m.me/saira" },
 ];
 
 const EMPTY_FORM = {
   name: "", price: "", description: "",
-  images: [], facebookUrl: SELLERS[0].url,
+  images: [], facebookUrl: "",
   category: "Accessories", brands: [],
   youtubeUrl: "",
   rating: 0,
+  author: "", // Add author field for multi-seller support
 };
 
 /* ─── Helpers ────────────────────────────────────────────── */
@@ -42,7 +58,7 @@ const getYouTubeId = (url) => {
 };
 
 export default function AdminPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, authLoading } = useAuth();
   const navigate = useNavigate();
 
   const [products, setProducts] = useState([]);
@@ -69,12 +85,45 @@ export default function AdminPage() {
     setTimeout(() => setStatusMessage(null), 3000);
   };
 
+  // Get current admin info based on logged-in user
+  const getCurrentAdmin = () => {
+    if (!user?.uid) return null;
+    return ADMIN_CONFIG[user.uid] || null;
+  };
+
+  const handleCopyStoreLink = async (authorName) => {
+    if (!authorName || !authorName.trim()) {
+      showPopup("⚠️ Please set an author name first!");
+      return;
+    }
+    
+    const link = `${window.location.origin}?author=${authorName.toLowerCase().trim()}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      showPopup(`✅ Store link copied: ${link}`);
+    } catch (err) {
+      showPopup("❌ Failed to copy link");
+    }
+  };
+
   // With realtime Firestore subscription, these are no-ops kept to avoid larger refactors.
   const fetchProducts = async () => true;
 
   useEffect(() => {
     if (!authLoading && !user) navigate("/");
   }, [authLoading, user, navigate]);
+
+  // Auto-assign author and seller when admin logs in or form is reset
+  useEffect(() => {
+    const currentAdmin = getCurrentAdmin();
+    if (currentAdmin && !editingId) {
+            setForm(prev => ({
+        ...prev,
+        author: currentAdmin.name,
+        facebookUrl: currentAdmin.sellerUrl
+      }));
+    }
+  }, [user, editingId]);
 
   useEffect(() => {
     let mounted = true;
@@ -221,6 +270,7 @@ export default function AdminPage() {
         );
       }
 
+      const currentAdmin = getCurrentAdmin();
       const productData = {
         ...form,
         images: finalImageUrls,
@@ -230,8 +280,10 @@ export default function AdminPage() {
         brands: form.brands || [],
         brand: (form.brands || []).join(", "), // Keep backward compatibility
         rating: Math.max(0, Math.min(5, Number(form.rating || 0))),
+        author: form.author || currentAdmin?.name, // Ensure author field is included
       };
 
+      
       if (editingId) {
         await updateDoc(doc(db, "products", editingId), { ...productData, updatedAt: serverTimestamp() });
         showPopup("✅ Product updated!");
@@ -263,6 +315,7 @@ export default function AdminPage() {
       brands: p.brands || (p.brand ? p.brand.split(", ").filter(b => b.trim()) : []),
       youtubeUrl: p.youtubeUrl || "",
       rating: typeof p.rating === "number" ? p.rating : 0,
+      author: p.author || "",
     });
     setImageFiles([]);
     setPreviewUrls(p.images?.length ? p.images : p.imageUrl ? [p.imageUrl] : []);
@@ -280,7 +333,12 @@ export default function AdminPage() {
   };
 
   const cancelForm = () => {
-    setForm(EMPTY_FORM);
+    const currentAdmin = getCurrentAdmin();
+    setForm({
+      ...EMPTY_FORM,
+      author: currentAdmin?.name || "",
+      facebookUrl: currentAdmin?.sellerUrl || ""
+    });
     setImageFiles([]);
     setPreviewUrls([]);
     setEditingId(null);
@@ -298,8 +356,10 @@ export default function AdminPage() {
   }
   if (!user) return null;
 
+  const currentAdmin = getCurrentAdmin();
   const filteredProducts = products.filter((p) =>
-    p.name?.toLowerCase().includes(adminSearch.toLowerCase())
+    p.name?.toLowerCase().includes(adminSearch.toLowerCase()) &&
+    (!currentAdmin || p.author === currentAdmin.name)
   );
 
   /* ─── RENDER ─────────────────────────────────────────────── */
@@ -310,8 +370,17 @@ export default function AdminPage() {
       {/* ── Header ── */}
       <div style={s.header}>
         <div>
-          <h1 style={s.title}>Admin Dashboard</h1>
-          <p style={s.sub}>Logged in as {user.email}</p>
+          <h1 style={s.title}>
+            {getCurrentAdmin()?.label ? `${getCurrentAdmin().label}'s Dashboard` : 'Admin Dashboard'}
+          </h1>
+          <p style={s.sub}>
+            Logged in as {user.email}
+            {getCurrentAdmin() && (
+              <span style={{ color: "var(--accent)", fontWeight: 600 }}>
+                {' · '}{getCurrentAdmin().label} (Author: {getCurrentAdmin().name})
+              </span>
+            )}
+          </p>
         </div>
         <div style={s.headerRight}>
           {!showForm && activeTab === "products" && (
@@ -476,8 +545,39 @@ export default function AdminPage() {
                 </Field>
 
                 {/* Images */}
-                <Field label="Upload Images">
-                  <input type="file" accept="image/*" multiple onChange={handleFileChange} style={s.fileInput} />
+                <Field label="Product Images">
+                  <div 
+                    style={s.uploadArea}
+                    onClick={() => document.getElementById('fileInput').click()}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.currentTarget.style.borderColor = 'var(--accent)';
+                    }}
+                    onDragLeave={(e) => {
+                      e.preventDefault();
+                      e.currentTarget.style.borderColor = 'var(--border)';
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.currentTarget.style.borderColor = 'var(--border)';
+                      const files = Array.from(e.dataTransfer.files).filter(file => file.type.startsWith('image/'));
+                      handleFileChange({ target: { files } });
+                    }}
+                  >
+                    <div style={s.uploadContent}>
+                      <div style={s.uploadIcon}>📷</div>
+                      <p style={s.uploadText}>Click to upload or drag and drop</p>
+                      <p style={s.uploadSubtext}>PNG, JPG, GIF up to 10MB</p>
+                    </div>
+                    <input 
+                      id="fileInput"
+                      type="file" 
+                      accept="image/*" 
+                      multiple 
+                      onChange={handleFileChange} 
+                      style={{ display: 'none' }} 
+                    />
+                  </div>
                 </Field>
 
                 {(previewUrls.length > 0 || form.images?.length > 0) && (
@@ -493,11 +593,32 @@ export default function AdminPage() {
 
                 {/* Seller */}
                 <Field label="Assign Seller">
-                  <select name="facebookUrl" value={form.facebookUrl} onChange={handleChange} style={s.input}>
-                    {SELLERS.map((sel) => (
-                      <option key={sel.label} value={sel.url}>{sel.label}</option>
-                    ))}
-                  </select>
+                  <input 
+                    type="text"
+                    value={getCurrentAdmin()?.label || "Loading..."} 
+                    readOnly
+                    style={s.input}
+                  />
+                  <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
+                    Auto-assigned for your account
+                  </p>
+                </Field>
+
+                {/* Author */}
+                <Field label="Author (for store link)">
+                  <input 
+                    name="author" 
+                    value={form.author} 
+                    onChange={handleChange}
+                    placeholder="e.g. mina, saira" 
+                    style={s.input}
+                    disabled={!editingId} // Read-only for new products, editable for edits
+                  />
+                  {!editingId && (
+                    <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
+                      Auto-assigned for your account
+                    </p>
+                  )}
                 </Field>
 
                 <div style={s.btnRow}>
@@ -861,6 +982,40 @@ const s = {
     border: "1px solid var(--border-light)", borderRadius: 8,
     color: "var(--text)", fontSize: 14, boxSizing: "border-box",
   },
+  uploadArea: {
+    border: "2px dashed var(--border)",
+    borderRadius: 12,
+    padding: "32px 16px",
+    textAlign: "center",
+    cursor: "pointer",
+    transition: "all 0.3s ease",
+    background: "var(--bg-input)",
+    "&:hover": {
+      borderColor: "var(--accent)",
+      background: "var(--bg-input-hover)",
+    },
+  },
+  uploadContent: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 8,
+  },
+  uploadIcon: {
+    fontSize: 48,
+    marginBottom: 8,
+  },
+  uploadText: {
+    color: "var(--text)",
+    fontSize: 16,
+    fontWeight: 500,
+    margin: 0,
+  },
+  uploadSubtext: {
+    color: "var(--text-muted)",
+    fontSize: 14,
+    margin: 0,
+  },
   ytPreviewWrap: { marginTop: 10, borderRadius: 10, overflow: "hidden" },
   ytFrame: { width: "100%", height: 220, border: "none", display: "block" },
   imageGrid: {
@@ -876,6 +1031,17 @@ const s = {
     lineHeight: 1, cursor: "pointer",
   },
   btnRow: { display: "flex", gap: 12, paddingTop: 4 },
+    addBtn: {
+    background: "var(--accent)", color: "#fff", border: "none",
+    padding: "8px 16px", borderRadius: 8, fontWeight: 700,
+    cursor: "pointer", transition: "all 0.2s",
+    "&:hover": { background: "var(--accent-hover)", transform: "translateY(-1px)" },
+  },
+  copyLinkBtn: {
+    background: "var(--bg-hover)", color: "var(--text)", border: "1px solid var(--border)",
+    borderRadius: 6, padding: "10px 16px", cursor: "pointer", fontSize: 14,
+    fontWeight: 600, whiteSpace: "nowrap",
+  },
   saveBtn: {
     background: "var(--accent)", color: "var(--accent-text)", border: "none",
     borderRadius: 8, padding: "11px 24px", fontWeight: 700, fontSize: 14,
