@@ -25,7 +25,7 @@ const ADMIN_CONFIG = {
   "TX99yIEmAqWsfPBnkQHGBLJbgXi2": {
     name: "mina",
     label: "Mina",
-    sellerUrl: "https://m.me/mina080808",
+    sellerUrl: "https://m.me/minaonline08",
     email: "moninapantoja73@gmail.com"
   },
   "aOulrfPmz8XJ6YuLNeZsUur0Q7w1": {
@@ -37,7 +37,7 @@ const ADMIN_CONFIG = {
 };
 
 const SELLERS = [
-  { label: "Mina", url: "https://m.me/mina080808" },
+  { label: "Mina", url: "https://m.me/minaonline08" },
   { label: "Saira", url: "https://m.me/saira" },
 ];
 

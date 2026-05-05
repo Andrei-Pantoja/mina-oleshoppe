@@ -1,10 +1,8 @@
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { db } from "../firebase/config";
 
-// NOTE: Some Firestore security rules only allow writes under "products".
-// Storing this config doc there avoids "Missing or insufficient permissions".
-// IMPORTANT: Firestore reserves document ids wrapped in "__".
-const OPTIONS_DOC_PATH = ["products", "shopOptions"];
+// NOTE: Admin options are stored under shopConfig so Firestore rules allow admin writes.
+const OPTIONS_DOC_PATH = ["shopConfig", "shopOptions"];
 
 function naturalCompare(a, b) {
   return String(a || "").localeCompare(String(b || ""), undefined, { numeric: true, sensitivity: "base" });
