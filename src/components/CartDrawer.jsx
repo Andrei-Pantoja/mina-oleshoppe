@@ -48,7 +48,7 @@ export default function CartDrawer({ open, onClose, onCheckout }) {
             <>
               <h4 style={{ color: "var(--text)", margin: 0 }}>Total: ₱{total.toLocaleString()}</h4>
               <button onClick={() => { onClose(); onCheckout(); }} style={styles.checkoutBtn}>
-                💬 Checkout via Messenger
+                💬 Checkout via Facebook
               </button>
             </>
           )}

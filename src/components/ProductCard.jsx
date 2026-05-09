@@ -157,12 +157,15 @@ export default function ProductCard({ product, onClick }) {
               >🛒</button>
             )}
             {facebookUrl ? (
-              <a href={facebookUrl} target="_blank" rel="noreferrer"
+              <a href="https://www.facebook.com/sairachandesu2003" target="_blank" rel="noreferrer"
                 style={styles.cartBtn} onClick={(e) => e.stopPropagation()}>
                 Chat
               </a>
             ) : (
-              <span style={styles.noLink}>No link</span>
+              <a href="https://www.facebook.com/sairachandesu2003" target="_blank" rel="noreferrer"
+                style={styles.cartBtn} onClick={(e) => e.stopPropagation()}>
+                Chat
+              </a>
             )}
           </div>
         </div>

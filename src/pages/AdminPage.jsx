@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   collection, getDocs, addDoc, updateDoc, deleteDoc,
@@ -37,8 +37,8 @@ const ADMIN_CONFIG = {
 };
 
 const SELLERS = [
-  { label: "Mina", url: "https://m.me/minaonline08" },
-  { label: "Saira", url: "https://m.me/sairachandesu2003" },
+  { label: "Mina", url: "https://www.facebook.com/MinaOnlineShoppee" },
+  { label: "Saira", url: "https://www.facebook.com/sairachandesu2003" },
 ];
 
 const EMPTY_FORM = {
@@ -65,6 +65,19 @@ export default function AdminPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [imageFiles, setImageFiles] = useState([]);
   const [previewUrls, setPreviewUrls] = useState([]);
+  const cropAreaRef = useRef(null);
+  const dragRef = useRef(null);
+  const [cropState, setCropState] = useState({
+    open: false,
+    fileIndex: null,
+    src: "",
+    x: 10,
+    y: 10,
+    width: 80,
+    height: 80,
+    naturalWidth: 0,
+    naturalHeight: 0,
+  });
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [fetchLoading, setFetchLoading] = useState(true);
@@ -243,6 +256,183 @@ export default function AdminPage() {
     setImageFiles(files);
     setPreviewUrls(files.map((f) => URL.createObjectURL(f)));
     setForm((cur) => ({ ...cur, images: [] }));
+    setCropState((prev) => ({ ...prev, open: false }));
+  };
+
+  const openCropModal = (idx) => {
+    if (idx == null || !previewUrls[idx]) return;
+    setCropState({
+      open: true,
+      fileIndex: idx,
+      src: previewUrls[idx],
+      x: 10,
+      y: 10,
+      width: 80,
+      height: 80,
+      naturalWidth: 0,
+      naturalHeight: 0,
+    });
+  };
+
+  const closeCropModal = () => {
+    dragRef.current = null;
+    setCropState((prev) => ({ ...prev, open: false, fileIndex: null, src: "" }));
+  };
+
+  const updateCropValue = (field, value) => {
+    setCropState((prev) => {
+      const next = { ...prev, [field]: Number(value) };
+      if (field === "x") next.x = Math.min(Math.max(0, next.x), 100 - next.width);
+      if (field === "y") next.y = Math.min(Math.max(0, next.y), 100 - next.height);
+      if (field === "width") next.width = Math.min(Math.max(10, next.width), 100 - next.x);
+      if (field === "height") next.height = Math.min(Math.max(10, next.height), 100 - next.y);
+      return next;
+    });
+  };
+
+  const startCropDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    dragRef.current = {
+      type: "move",
+      startX: clientX,
+      startY: clientY,
+      origX: cropState.x,
+      origY: cropState.y,
+      origWidth: cropState.width,
+      origHeight: cropState.height,
+    };
+  };
+
+  const startCropResize = (corner) => (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    dragRef.current = {
+      type: "resize",
+      corner,
+      startX: clientX,
+      startY: clientY,
+      origX: cropState.x,
+      origY: cropState.y,
+      origWidth: cropState.width,
+      origHeight: cropState.height,
+    };
+  };
+
+  const stopCropDrag = () => {
+    dragRef.current = null;
+  };
+
+  const handleCropDrag = (e) => {
+    if (!dragRef.current) return;
+    const area = cropAreaRef.current;
+    if (!area) return;
+    const rect = area.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const deltaX = ((clientX - dragRef.current.startX) / rect.width) * 100;
+    const deltaY = ((clientY - dragRef.current.startY) / rect.height) * 100;
+
+    if (dragRef.current.type === "move") {
+      const newX = Math.min(Math.max(0, dragRef.current.origX + deltaX), 100 - cropState.width);
+      const newY = Math.min(Math.max(0, dragRef.current.origY + deltaY), 100 - cropState.height);
+      setCropState((prev) => ({ ...prev, x: newX, y: newY }));
+      return;
+    }
+
+    const { corner, origX, origY, origWidth, origHeight } = dragRef.current;
+    let nextX = cropState.x;
+    let nextY = cropState.y;
+    let nextW = cropState.width;
+    let nextH = cropState.height;
+
+    if (corner.includes("w")) {
+      nextX = Math.min(Math.max(0, origX + deltaX), origX + origWidth - 10);
+      nextW = Math.max(10, Math.min(100 - nextX, origWidth - deltaX));
+    }
+    if (corner.includes("e")) {
+      nextW = Math.max(10, Math.min(100 - origX, origWidth + deltaX));
+    }
+    if (corner.includes("n")) {
+      nextY = Math.min(Math.max(0, origY + deltaY), origY + origHeight - 10);
+      nextH = Math.max(10, Math.min(100 - nextY, origHeight - deltaY));
+    }
+    if (corner.includes("s")) {
+      nextH = Math.max(10, Math.min(100 - origY, origHeight + deltaY));
+    }
+
+    if (nextX + nextW > 100) {
+      nextW = 100 - nextX;
+    }
+    if (nextY + nextH > 100) {
+      nextH = 100 - nextY;
+    }
+
+    setCropState((prev) => ({ ...prev, x: nextX, y: nextY, width: nextW, height: nextH }));
+  };
+
+  useEffect(() => {
+    if (!cropState.open) return;
+    window.addEventListener("mousemove", handleCropDrag);
+    window.addEventListener("mouseup", stopCropDrag);
+    window.addEventListener("touchmove", handleCropDrag, { passive: false });
+    window.addEventListener("touchend", stopCropDrag);
+    return () => {
+      window.removeEventListener("mousemove", handleCropDrag);
+      window.removeEventListener("mouseup", stopCropDrag);
+      window.removeEventListener("touchmove", handleCropDrag);
+      window.removeEventListener("touchend", stopCropDrag);
+    };
+  }, [cropState.open, handleCropDrag]);
+
+  const confirmCrop = async () => {
+    const idx = cropState.fileIndex;
+    if (idx == null || !imageFiles[idx] || !cropState.src) return;
+
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.src = cropState.src;
+    await new Promise((resolve) => {
+      image.onload = resolve;
+      image.onerror = resolve;
+    });
+
+    const naturalWidth = image.naturalWidth || cropState.naturalWidth || 1;
+    const naturalHeight = image.naturalHeight || cropState.naturalHeight || 1;
+    const sx = (cropState.x / 100) * naturalWidth;
+    const sy = (cropState.y / 100) * naturalHeight;
+    const sw = (cropState.width / 100) * naturalWidth;
+    const sh = (cropState.height / 100) * naturalHeight;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(sw);
+    canvas.height = Math.round(sh);
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(image, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, imageFiles[idx].type || "image/png"));
+    if (!blob) {
+      alert("Unable to crop image.");
+      return;
+    }
+
+    const newFile = new File([blob], imageFiles[idx].name, { type: blob.type });
+    const newPreview = URL.createObjectURL(newFile);
+
+    setImageFiles((cur) => cur.map((file, i) => (i === idx ? newFile : file)));
+    setPreviewUrls((cur) => cur.map((url, i) => (i === idx ? newPreview : url)));
+    closeCropModal();
+  };
+
+  const handleCropImageLoad = (e) => {
+    const { naturalWidth, naturalHeight } = e.target;
+    setCropState((prev) => ({ ...prev, naturalWidth, naturalHeight }));
   };
 
   const removePreviewImage = (idx) => {
@@ -586,8 +776,69 @@ export default function AdminPage() {
                       <div key={idx} style={s.previewWrap}>
                         <button type="button" onClick={() => removePreviewImage(idx)} style={s.removeBtn}>×</button>
                         <img src={url} alt="" style={s.previewThumb} />
+                        {imageFiles.length > 0 && idx < imageFiles.length && (
+                          <button type="button" onClick={() => openCropModal(idx)} style={s.cropBtn}>
+                            Crop
+                          </button>
+                        )}
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {cropState.open && (
+                  <div style={s.cropOverlay} onClick={closeCropModal}>
+                    <div style={s.cropModal} onClick={(e) => e.stopPropagation()}>
+                      <h3 style={s.cropTitle}>Crop image before saving</h3>
+                      <div style={s.cropPreviewWrap} ref={cropAreaRef}>
+                        <img
+                          src={cropState.src}
+                          alt="Crop preview"
+                          style={s.cropPreviewImage}
+                          onLoad={handleCropImageLoad}
+                        />
+                        <div
+                          style={{
+                            ...s.cropRect,
+                            left: `${cropState.x}%`,
+                            top: `${cropState.y}%`,
+                            width: `${cropState.width}%`,
+                            height: `${cropState.height}%`,
+                          }}
+                          onMouseDown={startCropDrag}
+                          onTouchStart={startCropDrag}
+                        >
+                          <div
+                            style={{ ...s.cropHandle, ...s.cropHandleNW }}
+                            onMouseDown={startCropResize("nw")}
+                            onTouchStart={startCropResize("nw")}
+                          />
+                          <div
+                            style={{ ...s.cropHandle, ...s.cropHandleNE }}
+                            onMouseDown={startCropResize("ne")}
+                            onTouchStart={startCropResize("ne")}
+                          />
+                          <div
+                            style={{ ...s.cropHandle, ...s.cropHandleSW }}
+                            onMouseDown={startCropResize("sw")}
+                            onTouchStart={startCropResize("sw")}
+                          />
+                          <div
+                            style={{ ...s.cropHandle, ...s.cropHandleSE }}
+                            onMouseDown={startCropResize("se")}
+                            onTouchStart={startCropResize("se")}
+                          />
+                        </div>
+                      </div>
+                      <div style={s.cropBtnRow}>
+                        <button type="button" onClick={confirmCrop} style={s.saveBtn}>
+                          Apply Crop
+                        </button>
+                        <button type="button" onClick={closeCropModal} style={s.cancelBtn}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
 
@@ -1024,11 +1275,86 @@ const s = {
   },
   previewWrap: { position: "relative", borderRadius: 8, overflow: "hidden" },
   previewThumb: { width: "100%", height: 100, objectFit: "cover", display: "block" },
+  cropBtn: {
+    position: "absolute",
+    left: 8,
+    bottom: 8,
+    zIndex: 2,
+    border: "none",
+    background: "rgba(0,0,0,0.7)",
+    color: "#fff",
+    borderRadius: 6,
+    padding: "6px 10px",
+    fontSize: 12,
+    cursor: "pointer",
+  },
   removeBtn: {
     position: "absolute", top: 6, right: 6, zIndex: 2,
     width: 24, height: 24, borderRadius: "50%", border: "none",
     background: "rgba(0,0,0,0.7)", color: "#fff", fontSize: 16,
     lineHeight: 1, cursor: "pointer",
+  },
+  cropOverlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,0.55)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+    zIndex: 9999,
+  },
+  cropModal: {
+    width: "100%",
+    maxWidth: 720,
+    background: "var(--bg-card)",
+    borderRadius: 16,
+    border: "1px solid var(--border)",
+    padding: 20,
+    boxShadow: "0 18px 56px rgba(0,0,0,0.16)",
+  },
+  cropTitle: { margin: 0, fontSize: 18, color: "var(--text)", marginBottom: 16 },
+  cropPreviewWrap: {
+    position: "relative",
+    width: "100%",
+    minHeight: 320,
+    background: "#111",
+    borderRadius: 14,
+    overflow: "hidden",
+    marginBottom: 16,
+  },
+  cropPreviewImage: {
+    width: "100%",
+    height: "auto",
+    display: "block",
+  },
+  cropRect: {
+    position: "absolute",
+    border: "2px dashed rgba(255,255,255,0.9)",
+    boxShadow: "0 0 0 9999px rgba(0,0,0,0.35)",
+    cursor: "grab",
+    touchAction: "none",
+    pointerEvents: "auto",
+  },
+  cropHandle: {
+    position: "absolute",
+    width: 16,
+    height: 16,
+    background: "#fff",
+    border: "2px solid var(--accent)",
+    borderRadius: 4,
+    boxSizing: "border-box",
+    transform: "translate(-50%, -50%)",
+    cursor: "nwse-resize",
+  },
+  cropHandleNW: { left: "0%", top: "0%", cursor: "nwse-resize" },
+  cropHandleNE: { left: "100%", top: "0%", cursor: "nesw-resize" },
+  cropHandleSW: { left: "0%", top: "100%", cursor: "nesw-resize" },
+  cropHandleSE: { left: "100%", top: "100%", cursor: "nwse-resize" },
+  cropBtnRow: {
+    display: "flex",
+    gap: 12,
+    flexWrap: "wrap",
   },
   btnRow: { display: "flex", gap: 12, paddingTop: 4 },
     addBtn: {

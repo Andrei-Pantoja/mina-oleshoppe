@@ -19,10 +19,10 @@ const CATEGORIES = ["All", ...DEFAULT_CATEGORIES];
 const BRANDS_BY_CATEGORY = DEFAULT_BRANDS_BY_CATEGORY;
 
 function getMostCommonSellerUrl(cartItems) {
-  if (!cartItems?.length) return "https://m.me/Sithis02";
+  if (!cartItems?.length) return "https://www.facebook.com/sairachandesu2003";
   const counts = {};
   cartItems.forEach((item) => {
-    const url = item.facebookUrl || "https://m.me/Sithis02";
+    const url = item.facebookUrl || "https://www.facebook.com/sairachandesu2003";
     counts[url] = (counts[url] || 0) + (item.quantity || 1);
   });
   return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
@@ -396,7 +396,7 @@ export default function StorePage() {
           <div style={styles.inquiryBox} onClick={(e) => e.stopPropagation()}>
             <h3 style={styles.inquiryTitle}>📋 Confirm Your Inquiry</h3>
             <p style={styles.inquirySubtitle}>
-              Copy the message then paste it in Messenger.
+              Copy the message then paste it in Facebook Messenger or send directly to the seller.
             </p>
             <div style={styles.inquiryMessage}>
               {inquiryPopup.message.split("\n").map((line, i) => (
@@ -408,7 +408,7 @@ export default function StorePage() {
                 {copied ? "✅ Copied!" : "📋 Copy Message"}
               </button>
               <button onClick={() => window.open(inquiryPopup.sellerUrl, "_blank")} style={styles.messengerBtn}>
-                💬 Open Messenger
+                💬 Open Facebook
               </button>
               <button onClick={() => setInquiryPopup(null)} style={styles.cancelInquiryBtn}>Cancel</button>
             </div>

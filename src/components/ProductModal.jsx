@@ -90,7 +90,7 @@ export default function ProductModal({ product, onClose }) {
   };
 
   const handleOpenMessenger = () => {
-    if (product.facebookUrl) window.open(product.facebookUrl, "_blank");
+    window.open("https://www.facebook.com/sairachandesu2003", "_blank");
   };
 
   if (!product) return null;
@@ -104,7 +104,7 @@ export default function ProductModal({ product, onClose }) {
           <div style={styles.inquiryBox}>
             <h3 style={styles.inquiryTitle}>💬 Inquire About This Item</h3>
             <p style={styles.inquirySubtitle}>
-              Copy the message, then paste it in Messenger to inquire.
+              Copy the message, then paste it in Facebook Messenger or send directly to the seller.
             </p>
             <div style={styles.inquiryMessage}>
               {buildInquiryMessage().split("\n").map((line, i) => (
@@ -116,7 +116,7 @@ export default function ProductModal({ product, onClose }) {
                 {copied ? "✅ Copied!" : "📋 Copy Message"}
               </button>
               <button onClick={handleOpenMessenger} style={styles.messengerBtn}>
-                💬 Open Messenger
+                💬 Open Facebook
               </button>
               <button onClick={() => setShowInquiry(false)} style={styles.cancelBtn2}>
                 ← Back
