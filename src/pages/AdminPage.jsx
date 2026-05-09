@@ -31,14 +31,14 @@ const ADMIN_CONFIG = {
   "aOulrfPmz8XJ6YuLNeZsUur0Q7w1": {
     name: "saira", 
     label: "Saira",
-    sellerUrl: "https://m.me/saira",
+    sellerUrl: "https://m.me/sairachandesu2003",
     email: "zyraaaaaa27@gmail.com"
   }
 };
 
 const SELLERS = [
   { label: "Mina", url: "https://m.me/minaonline08" },
-  { label: "Saira", url: "https://m.me/saira" },
+  { label: "Saira", url: "https://m.me/sairachandesu2003" },
 ];
 
 const EMPTY_FORM = {
