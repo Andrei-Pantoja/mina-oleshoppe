@@ -35,34 +35,19 @@ export default function ProductModal({ product, onClose }) {
     : [];
 
   const [imgIndex, setImgIndex] = useState(0);
-  const [isAutoPlaying, setIsAutoPlaying] = useState(true);
   const [qty, setQty] = useState(1);
   const [showInquiry, setShowInquiry] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Auto-play functionality
-  useEffect(() => {
-    if (!isAutoPlaying || images.length <= 1) return;
-    
-    const interval = setInterval(() => {
-      setImgIndex((prev) => (prev + 1) % images.length);
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, [isAutoPlaying, images.length]);
-
   const nextImage = () => {
-    setIsAutoPlaying(false);
     setImgIndex((p) => (p + 1) % images.length);
   };
   const prevImage = () => {
-    setIsAutoPlaying(false);
     setImgIndex((p) => (p - 1 + images.length) % images.length);
   };
 
   const handleDotClick = (e, index) => {
     e.stopPropagation();
-    setIsAutoPlaying(false);
     setImgIndex(index);
   };
 
@@ -140,20 +125,32 @@ export default function ProductModal({ product, onClose }) {
               animate={{ opacity: 1 }}
               transition={{ duration: 0.3, ease: "easeInOut" }}
               key={images[imgIndex]}
+              onContextMenu={(e) => e.preventDefault()}
+              draggable={false}
+              onDragStart={(e) => e.preventDefault()}
+              onTouchStart={(e) => e.preventDefault()}
+              onTouchMove={(e) => e.preventDefault()}
+              onCopy={(e) => e.preventDefault()}
+              onCut={(e) => e.preventDefault()}
+              onPaste={(e) => e.preventDefault()}
+              className="protected-image"
+            />
+            <div 
+              style={styles.imageOverlay}
+              onContextMenu={(e) => e.preventDefault()}
+              onDragStart={(e) => e.preventDefault()}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => e.preventDefault()}
             />
             {images.length > 1 && (
               <>
                 <button 
                   onClick={prevImage} 
                   style={styles.arrowLeft}
-                  onMouseEnter={() => setIsAutoPlaying(false)}
-                  onMouseLeave={() => setIsAutoPlaying(true)}
                 >‹</button>
                 <button 
                   onClick={nextImage} 
                   style={styles.arrowRight}
-                  onMouseEnter={() => setIsAutoPlaying(false)}
-                  onMouseLeave={() => setIsAutoPlaying(true)}
                 >›</button>
               </>
             )}
@@ -304,15 +301,18 @@ const styles = {
     position: "absolute", top: "50%", left: 10, transform: "translateY(-50%)",
     background: "rgba(0,0,0,0.6)", color: "#fff", border: "none",
     fontSize: 24, padding: "4px 10px", cursor: "pointer", borderRadius: 6,
+    zIndex: 20,
   },
   arrowRight: {
     position: "absolute", top: "50%", right: 10, transform: "translateY(-50%)",
     background: "rgba(0,0,0,0.6)", color: "#fff", border: "none",
     fontSize: 24, padding: "4px 10px", cursor: "pointer", borderRadius: 6,
+    zIndex: 20,
   },
   dots: {
     position: "absolute", bottom: 8, left: "50%", transform: "translateX(-50%)",
     display: "flex", gap: 6,
+    zIndex: 20,
   },
   dot: { width: 7, height: 7, borderRadius: "50%", background: "rgba(255,255,255,0.4)", cursor: "pointer" },
   dotActive: { width: 7, height: 7, borderRadius: "50%", background: "var(--accent)", cursor: "pointer" },
@@ -366,5 +366,28 @@ const styles = {
   closeBtn: {
     width: "100%", background: "none", border: "1px solid var(--border-light)",
     color: "var(--text-muted)", padding: 10, borderRadius: 6, cursor: "pointer",
+  },
+  protectedImage: {
+    userSelect: "none",
+    WebkitUserSelect: "none",
+    MozUserSelect: "none",
+    msUserSelect: "none",
+    WebkitTouchCallout: "none",
+    WebkitTapHighlightColor: "transparent",
+    pointerEvents: "auto",
+  },
+  imageWrapper: {
+    position: "relative",
+    pointerEvents: "auto",
+  },
+  imageOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1,
+    pointerEvents: "none",
+    backgroundColor: "transparent",
   },
 };

@@ -25,13 +25,13 @@ const ADMIN_CONFIG = {
   "TX99yIEmAqWsfPBnkQHGBLJbgXi2": {
     name: "mina",
     label: "Mina",
-    sellerUrl: "https://m.me/minaonline08",
+    sellerUrl: "https://www.facebook.com/MinaOnlineShoppee",
     email: "moninapantoja73@gmail.com"
   },
   "aOulrfPmz8XJ6YuLNeZsUur0Q7w1": {
     name: "saira", 
     label: "Saira",
-    sellerUrl: "https://m.me/sairachandesu2003",
+    sellerUrl: "https://www.facebook.com/sairachandesu2003",
     email: "zyraaaaaa27@gmail.com"
   }
 };

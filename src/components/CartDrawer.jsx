@@ -7,6 +7,36 @@ export default function CartDrawer({ open, onClose, onCheckout }) {
     (sum, item) => sum + Number(item.price || 0) * (item.quantity || 1), 0
   );
 
+  // Function to get the most common seller URL (force Facebook profile URLs)
+  const getMostCommonSellerUrl = (cartItems) => {
+    if (!cartItems?.length) return "https://www.facebook.com/sairachandesu2003";
+    const counts = {};
+    cartItems.forEach((item) => {
+      // Force Facebook profile URLs regardless of what's stored in database
+      let sellerUrl = item.facebookUrl || "https://www.facebook.com/sairachandesu2003";
+      
+      // Convert any Messenger URLs to Facebook profile URLs
+      if (sellerUrl.includes("m.me/")) {
+        if (sellerUrl.includes("minaonline08")) {
+          sellerUrl = "https://www.facebook.com/MinaOnlineShoppee";
+        } else if (sellerUrl.includes("sairachandesu2003")) {
+          sellerUrl = "https://www.facebook.com/sairachandesu2003";
+        } else {
+          sellerUrl = "https://www.facebook.com/sairachandesu2003"; // default fallback
+        }
+      }
+      
+      counts[sellerUrl] = (counts[sellerUrl] || 0) + (item.quantity || 1);
+    });
+    return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+  };
+
+  const handleDirectCheckout = () => {
+    const sellerUrl = getMostCommonSellerUrl(cart);
+    window.open(sellerUrl, "_blank");
+    onClose();
+  };
+
   return (
     <>
       {open && <div style={styles.overlay} onClick={onClose} />}
@@ -47,7 +77,7 @@ export default function CartDrawer({ open, onClose, onCheckout }) {
           {cart.length > 0 && (
             <>
               <h4 style={{ color: "var(--text)", margin: 0 }}>Total: ₱{total.toLocaleString()}</h4>
-              <button onClick={() => { onClose(); onCheckout(); }} style={styles.checkoutBtn}>
+              <button onClick={handleDirectCheckout} style={styles.checkoutBtn}>
                 💬 Checkout via Facebook
               </button>
             </>
