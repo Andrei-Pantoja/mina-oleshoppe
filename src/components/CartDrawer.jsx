@@ -31,7 +31,7 @@ export default function CartDrawer({ open, onClose, onCheckout }) {
     return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
   };
 
-  const handleDirectCheckout = () => {
+  const handleCheckout = () => {
     const sellerUrl = getMostCommonSellerUrl(cart);
     window.open(sellerUrl, "_blank");
     onClose();
@@ -77,7 +77,7 @@ export default function CartDrawer({ open, onClose, onCheckout }) {
           {cart.length > 0 && (
             <>
               <h4 style={{ color: "var(--text)", margin: 0 }}>Total: ₱{total.toLocaleString()}</h4>
-              <button onClick={handleDirectCheckout} style={styles.checkoutBtn}>
+              <button onClick={() => { onClose(); onCheckout(); }} style={styles.checkoutBtn}>
                 💬 Checkout via Facebook
               </button>
             </>
